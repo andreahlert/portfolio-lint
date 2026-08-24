@@ -391,7 +391,7 @@ export function RemediationList({ rows, violations, rules }: { rows: Remediation
         const textExamples = r.examples.filter((e) => !isIssueKey(e))
         const openLabel = keys.length < r.violations ? `Open first ${keys.length} in Jira` : `Open ${keys.length} in Jira`
         return (
-          <Box key={r.ruleId} xcss={rowStyle}>
+          <Box key={`${i}-${r.ruleId}`} xcss={rowStyle}>
             <Stack space="space.100">
               <Inline spread="space-between" alignBlock="center" shouldWrap>
                 <Inline space="space.150" alignBlock="center" shouldWrap>
@@ -452,7 +452,7 @@ function FilterSelect({ placeholder, options, value, onChange }: { placeholder: 
 
 const capitalizeWord = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-export function ViolationsTable({ rows, rules, max = 100 }: { rows: ViolationRow[]; rules?: RuleMap; max?: number }) {
+export function ViolationsTable({ rows, rules, total, max = 100 }: { rows: ViolationRow[]; rules?: RuleMap; total?: number; max?: number }) {
   const [project, setProject] = useState<string | null>(null)
   const [dimension, setDimension] = useState<string | null>(null)
   const [rule, setRule] = useState<string | null>(null)
@@ -496,6 +496,11 @@ export function ViolationsTable({ rows, rules, max = 100 }: { rows: ViolationRow
           {filtered.length > max ? `Showing first ${max} of ${filtered.length} findings.` : active ? `${filtered.length} of ${rows.length} findings.` : `${rows.length} findings.`}
         </Text>
       </Inline>
+      {total !== undefined && total > rows.length ? (
+        <Text size="small" color="color.text.subtle">
+          {`${total} findings in total. Only ${rows.length} are stored here, spread across projects. Open a project page for its complete list, or use the CLI for a full export.`}
+        </Text>
+      ) : null}
       {filtered.length === 0 ? (
         <Text color="color.text.subtle">No findings match these filters.</Text>
       ) : (

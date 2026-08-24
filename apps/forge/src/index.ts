@@ -1,6 +1,6 @@
 import Resolver from '@forge/resolver'
 import { ALL_RULES, getRule, type LintConfig } from '@portfolio-lint/core'
-import { loadConfig, loadHistory, loadLatest, projectFromReport, runScan, saveConfig, type StoredReport } from './scan'
+import { loadConfig, loadHistory, loadLatest, loadProjectViolations, projectFromReport, runScan, saveConfig, type StoredReport } from './scan'
 
 const resolver = new Resolver()
 
@@ -19,10 +19,12 @@ resolver.define('scanNow', async ({ payload }) => {
 resolver.define('getProjectReport', async ({ payload }) => {
   const projectKey = String(payload?.projectKey ?? '')
   const report = await loadLatest()
-  if (!report) return { project: null, scannedAt: null, violations: [] }
+  if (!report) return { project: null, scannedAt: null, violations: [], violationCount: 0 }
   const project = projectFromReport(report, projectKey) ?? null
-  const violations = report.violations.filter((v) => v.projectKey === projectKey)
-  return { project, scannedAt: report.scannedAt, violations }
+  // Per-project list is complete up to its cap; the report-level list is only a cross-project sample.
+  const violations = (await loadProjectViolations(projectKey)) ?? report.violations.filter((v) => v.projectKey === projectKey)
+  const violationCount = project ? project.rules.reduce((n, r) => n + r.violations, 0) : 0
+  return { project, scannedAt: report.scannedAt, violations, violationCount }
 })
 
 resolver.define('listRules', async () =>

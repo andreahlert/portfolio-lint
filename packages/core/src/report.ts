@@ -187,14 +187,14 @@ function buildRemediation(rules: Rule[], perProject: Array<{ project: Project; r
     let priority = 0
     let violations = 0
     const examples: string[] = []
-    for (const { results } of perProject) {
+    for (const { project, results } of perProject) {
       const res = results[i] as RuleResult
       const s = scoreRule(res)
       if (s === null) continue
       priority += (100 - s) * rule.weight * res.applicable
       violations += res.violations.length
       for (const v of res.violations) {
-        if (examples.length < 5) examples.push(v.itemKey ?? v.message)
+        if (examples.length < 5) examples.push(v.itemKey ?? `${project.key}: ${v.message}`)
       }
     }
     if (violations === 0) return

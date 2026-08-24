@@ -68,6 +68,8 @@ interface ProjectPayload {
   project: ProjectReport | null
   scannedAt: string | null
   violations: ViolationRow[]
+  /** True count for the project; `violations` can be shorter when the stored list is capped. */
+  violationCount?: number
 }
 
 const dimensionAppearance = (d: string) =>
@@ -169,9 +171,9 @@ function App() {
       if (next.project) {
         setDelta({
           prevScore: prev?.project?.score ?? null,
-          prevFindings: prev?.project ? prev.violations.length : null,
+          prevFindings: prev?.project ? (prev.violationCount ?? prev.violations.length) : null,
           score: next.project.score,
-          findings: next.violations.length,
+          findings: next.violationCount ?? next.violations.length,
         })
       }
     } catch (e) {
@@ -184,6 +186,7 @@ function App() {
   if (!projectKey || (!data && !error)) return <Spinner label="Loading" />
   const p = data?.project ?? null
   const violations = data?.violations ?? []
+  const violationCount = data?.violationCount ?? violations.length
 
   return (
     <Stack space="space.300">
@@ -192,7 +195,7 @@ function App() {
           <Inline space="space.075" alignBlock="center" shouldWrap>
             <Text color="color.text.subtle">Last scan</Text>
             <ScanTime iso={data?.scannedAt} locale={locale} />
-            <Text color="color.text.subtle">{`| ${p.itemCount} items, ${violations.length} ${violations.length === 1 ? 'finding' : 'findings'}. Scans run daily.`}</Text>
+            <Text color="color.text.subtle">{`| ${p.itemCount} items, ${violationCount} ${violationCount === 1 ? 'finding' : 'findings'}. Scans run daily.`}</Text>
           </Inline>
         ) : (
           <Text color="color.text.subtle">This project is not in the latest report yet.</Text>
@@ -225,7 +228,7 @@ function App() {
               <TabList>
                 <Tab>Fix first</Tab>
                 <Tab>Rules</Tab>
-                <Tab>{`Findings (${violations.length})`}</Tab>
+                <Tab>{`Findings (${violationCount})`}</Tab>
               </TabList>
               <TabPanel>
                 <TabBody>
@@ -243,7 +246,7 @@ function App() {
               </TabPanel>
               <TabPanel>
                 <TabBody>
-                  <ViolationsTable rows={violations} rules={rules} />
+                  <ViolationsTable rows={violations} rules={rules} total={violationCount} />
                 </TabBody>
               </TabPanel>
             </Tabs>

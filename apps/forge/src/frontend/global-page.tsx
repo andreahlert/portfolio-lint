@@ -260,7 +260,7 @@ function App() {
               </TabPanel>
               <TabPanel>
                 <TabBody>
-                  <ViolationsTable rows={r.violations} rules={rules} />
+                  <ViolationsTable rows={r.violations} rules={rules} total={r.violationCount} />
                 </TabBody>
               </TabPanel>
               <TabPanel>
