@@ -1,6 +1,6 @@
 import Resolver from '@forge/resolver'
 import { ALL_RULES, getRule, type LintConfig } from '@portfolio-lint/core'
-import { loadConfig, loadHistory, loadLatest, projectFromReport, runScan, saveConfig, type StoredReport } from './scan.js'
+import { loadConfig, loadHistory, loadLatest, projectFromReport, runScan, saveConfig, type StoredReport } from './scan'
 
 const resolver = new Resolver()
 

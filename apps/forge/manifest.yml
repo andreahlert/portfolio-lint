@@ -22,15 +22,18 @@ modules:
   rovo:agent:
     - key: portfolio-readiness-advisor
       name: Portfolio Readiness Advisor
-      description: Explains how ready this Jira site is for AI forecasting and what to fix first.
+      description: Explains how ready this Jira site is for AI forecasting and what to
+        fix first.
       prompt: >
-        You are the Portfolio Readiness Advisor. You help PMOs and project managers understand
-        whether their Jira data is good enough for AI-driven schedule, capacity and scope forecasts.
-        Always call get-portfolio-score before answering questions about scores, grades or what to fix.
-        Call explain-rule when the user asks what a rule means or why it matters.
-        Never invent scores. If no report exists yet, tell the user to open the Portfolio Readiness page
-        and run a scan. Present remediation as a short, prioritized list and say which forecast each fix improves.
-        You do not change any Jira data; you only read the latest report.
+        You are the Portfolio Readiness Advisor. You help PMOs and project
+        managers understand whether their Jira data is good enough for AI-driven
+        schedule, capacity and scope forecasts. Always call get-portfolio-score
+        before answering questions about scores, grades or what to fix. Call
+        explain-rule when the user asks what a rule means or why it matters.
+        Never invent scores. If no report exists yet, tell the user to open the
+        Portfolio Readiness page and run a scan. Present remediation as a short,
+        prioritized list and say which forecast each fix improves. You do not
+        change any Jira data; you only read the latest report.
       conversationStarters:
         - How ready is our portfolio for AI forecasting?
         - What should we fix first to trust schedule forecasts?
@@ -44,22 +47,25 @@ modules:
       function: getPortfolioScore
       actionVerb: GET
       description: >
-        Returns the latest Portfolio AI-Readiness report: portfolio score, grade, per-forecast reliability
-        (schedule, capacity, scope), per-project scores and the prioritized remediation list.
-        Optionally filtered to one Jira project key.
+        Returns the latest Portfolio AI-Readiness report: portfolio score,
+        grade, per-forecast reliability (schedule, capacity, scope), per-project
+        scores and the prioritized remediation list. Optionally filtered to one
+        Jira project key.
       inputs:
         projectKey:
           title: Project key
           type: string
           required: false
-          description: Jira project key to focus on, for example ALPHA. Leave empty for the whole portfolio.
+          description: Jira project key to focus on, for example ALPHA. Leave empty for
+            the whole portfolio.
     - key: explain-rule
       name: explainRule
       function: explainRule
       actionVerb: GET
       description: >
-        Explains one portfolio-lint rule: what it checks, which dimension and forecasts it affects,
-        why it degrades forecasting and how to remediate it.
+        Explains one portfolio-lint rule: what it checks, which dimension and
+        forecasts it affects, why it degrades forecasting and how to remediate
+        it.
       inputs:
         ruleId:
           title: Rule id
@@ -83,7 +89,7 @@ resources:
 app:
   runtime:
     name: nodejs22.x
-  id: ari:cloud:ecosystem::app/00000000-0000-0000-0000-000000000000
+  id: ari:cloud:ecosystem::app/3ea2e7ce-2801-493d-997d-3d0dfb6c023d
 permissions:
   scopes:
     - read:jira-work

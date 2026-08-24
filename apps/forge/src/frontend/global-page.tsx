@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import ForgeReconciler, { Button, DynamicTable, Heading, Inline, Lozenge, SectionMessage, Spinner, Stack, Text } from '@forge/react'
 import { invoke } from '@forge/bridge'
-import { fmt, gradeAppearance, RemediationTable, ScoreHeadline, ViolationsTable, type ForecastSet, type RemediationRow, type ViolationRow } from './shared.js'
+import { fmt, gradeAppearance, RemediationTable, ScoreHeadline, ViolationsTable, type ForecastSet, type RemediationRow, type ViolationRow } from './shared'
 
 interface ProjectRow {
   key: string

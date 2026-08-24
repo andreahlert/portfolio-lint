@@ -1,6 +1,6 @@
 import { storage } from '@forge/api'
 import { lintPortfolio, type LintConfig, type ProjectReport, type Report } from '@portfolio-lint/core'
-import { fetchPortfolio, listProjectKeys } from './jiraClient.js'
+import { fetchPortfolio, listProjectKeys } from './jiraClient'
 
 export const KEY_LATEST = 'report:latest'
 export const KEY_CONFIG = 'config'
