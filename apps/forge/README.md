@@ -53,6 +53,10 @@ stale in progress 14 days, stale open 90 days, max WIP 3, outlier factor 5.
 - `src/scan.ts`: runs `lintPortfolio` from `@portfolio-lint/core`, stores the latest report (violations capped at 500) and a 30-point score history.
 - UI is Forge UI Kit (`@forge/react`), rendered natively, no custom iframe.
 - `npm run typecheck -w portfolio-lint-forge` checks the app without deploying. `npx forge lint` needs a login.
+- Forge bundles with webpack + ts-loader using `tsconfig.json`. Two constraints: `noEmit` must be off (ts-loader needs output) and relative imports must be extensionless (`./scan`, not `./scan.js`); the Forge resolver does not map `.js` to `.ts`.
+- Forge CLI is non-interactive only with `--non-interactive`; `forge register` still prompts for a Developer Space on first use, so run it in a real TTY.
+- Auth without a TTY: export `FORGE_EMAIL` and `FORGE_API_TOKEN` (API token from [id.atlassian.com](https://id.atlassian.com/manage-profile/security/api-tokens)).
+- No Jira site yet? Create a free developer site at [go.atlassian.com/cloud-dev](https://go.atlassian.com/cloud-dev) (Cloud Developer Bundle, 5 users, no credit card).
 
 ## Marketplace notes
 
