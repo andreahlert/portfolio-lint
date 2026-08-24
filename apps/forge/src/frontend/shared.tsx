@@ -2,25 +2,30 @@ import React from 'react'
 import {
   Badge,
   Box,
+  Button,
   Code,
   DynamicTable,
   Heading,
   Icon,
   Inline,
   Lozenge,
+  Pressable,
   ProgressBar,
+  SectionMessage,
+  SectionMessageAction,
   Stack,
-  Tag,
-  TagGroup,
   Text,
+  Tooltip,
   xcss,
 } from '@forge/react'
+import { NavigationTarget, router } from '@forge/bridge'
 
 export type ForecastLabel = 'reliable' | 'degraded' | 'unreliable'
 
 export interface ForecastCell {
   score: number
   label: ForecastLabel
+  limitedBy?: string
 }
 
 export interface ForecastSet {
@@ -46,6 +51,8 @@ export interface ViolationRow {
 
 export type Tone = 'success' | 'warning' | 'danger'
 
+export const PROJECT_MODULE_KEY = 'portfolio-lint-project'
+
 export const fmt = (n: number | null | undefined): string => (n == null ? 'n/a' : n.toFixed(1))
 
 export const toneOf = (score: number | null | undefined): Tone =>
@@ -59,6 +66,92 @@ export const gradeAppearance = (grade: string) =>
 
 export const formatDate = (iso: string | null | undefined): string =>
   iso ? iso.slice(0, 16).replace('T', ' ') + ' UTC' : 'never'
+
+/** "2 hours ago" style label. Falls back to the date for anything older than a month. */
+export function relativeTime(iso: string | null | undefined, now: number = Date.now()): string {
+  if (!iso) return 'never'
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return 'never'
+  const s = Math.max(0, Math.round((now - t) / 1000))
+  if (s < 60) return 'just now'
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m} min ago`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h} ${h === 1 ? 'hour' : 'hours'} ago`
+  const d = Math.round(h / 24)
+  if (d === 1) return 'yesterday'
+  if (d < 30) return `${d} days ago`
+  return iso.slice(0, 10)
+}
+
+export function absoluteTime(iso: string, locale?: string): string {
+  try {
+    return new Date(iso).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })
+  } catch {
+    return formatDate(iso)
+  }
+}
+
+export function ScanTime({ iso, locale }: { iso: string | null | undefined; locale?: string }) {
+  if (!iso) return <Text color="color.text.subtle">never</Text>
+  return (
+    <Tooltip content={absoluteTime(iso, locale)} position="bottom">
+      <Text color="color.text.subtle" weight="medium">{relativeTime(iso)}</Text>
+    </Tooltip>
+  )
+}
+
+const issueKeyRe = /^[A-Z][A-Z0-9_]*-\d+$/
+export const isIssueKey = (s: string): boolean => issueKeyRe.test(s)
+
+/** Max keys in one `key in (...)` JQL. Keeps the URL well under browser limits. */
+const JQL_KEY_CAP = 200
+
+export const jqlKeysUrl = (keys: string[]): string =>
+  `/issues/?jql=${encodeURIComponent(`key in (${keys.slice(0, JQL_KEY_CAP).join(',')}) ORDER BY key ASC`)}`
+
+export const openIssues = (keys: string[]) => router.navigate(jqlKeysUrl(keys))
+
+export const openProjectPage = (projectKey: string) =>
+  router.navigate({ target: NavigationTarget.Module, moduleKey: PROJECT_MODULE_KEY, projectKey })
+
+export const openIssue = (issueKey: string) => router.navigate({ target: NavigationTarget.Issue, issueKey })
+
+const chipStyle = xcss({
+  backgroundColor: 'color.background.neutral',
+  borderRadius: 'radius.small',
+  paddingInline: 'space.075',
+  paddingBlock: 'space.025',
+})
+
+const linkStyle = xcss({ backgroundColor: 'color.background.neutral.subtle', padding: 'space.0' })
+
+/** Issue key rendered as a tag-like chip. Navigates in-app (no full page load). */
+export function IssueChip({ issueKey }: { issueKey: string }) {
+  return (
+    <Pressable xcss={chipStyle} onClick={() => openIssue(issueKey)}>
+      <Text size="small" weight="medium">{issueKey}</Text>
+    </Pressable>
+  )
+}
+
+/** Issue key rendered as a plain link. Navigates in-app. */
+export function IssueLink({ issueKey }: { issueKey: string }) {
+  return (
+    <Pressable xcss={linkStyle} onClick={() => openIssue(issueKey)}>
+      <Text weight="semibold" color="color.text.brand">{issueKey}</Text>
+    </Pressable>
+  )
+}
+
+/** Unique issue keys failing a given rule, in first-seen order. */
+export function keysForRule(violations: ViolationRow[], ruleId: string): string[] {
+  const seen = new Set<string>()
+  for (const v of violations) {
+    if (v.ruleId === ruleId && v.itemKey && !seen.has(v.itemKey)) seen.add(v.itemKey)
+  }
+  return [...seen]
+}
 
 const toneIcon = {
   success: { glyph: 'status-success', color: 'color.icon.success' },
@@ -179,7 +272,14 @@ export function ForecastCard({ kind, cell }: { kind: keyof ForecastSet; cell: Fo
           <Lozenge appearance={labelAppearance(cell.label)} isBold>{cell.label}</Lozenge>
         </Inline>
         <ScoreBar score={cell.score} />
-        <Text size="small" color="color.text.subtle">{forecastMeta[kind].hint}</Text>
+        {cell.limitedBy ? (
+          <Inline space="space.050" alignBlock="center">
+            <Text size="small" color="color.text.subtle">Limited by</Text>
+            <Code>{cell.limitedBy}</Code>
+          </Inline>
+        ) : (
+          <Text size="small" color="color.text.subtle">{forecastMeta[kind].hint}</Text>
+        )}
       </Stack>
     </Card>
   )
@@ -236,7 +336,7 @@ const rowStyle = xcss({
   padding: 'space.200',
 })
 
-export function RemediationList({ rows }: { rows: RemediationRow[] }) {
+export function RemediationList({ rows, violations }: { rows: RemediationRow[]; violations: ViolationRow[] }) {
   if (rows.length === 0) {
     return (
       <Inline space="space.100" alignBlock="center">
@@ -248,29 +348,43 @@ export function RemediationList({ rows }: { rows: RemediationRow[] }) {
   return (
     <Stack space="space.150">
       <Text color="color.text.subtle">Ordered by impact: (100 - score) x weight x items affected. Fix the top of the list first.</Text>
-      {rows.map((r, i) => (
-        <Box key={r.ruleId} xcss={rowStyle}>
-          <Stack space="space.100">
-            <Inline space="space.150" alignBlock="center" shouldWrap>
-              <Badge appearance={i === 0 ? 'important' : 'primary'}>{i + 1}</Badge>
-              <Code>{r.ruleId}</Code>
-              <Badge appearance="default">{`${r.violations} ${r.violations === 1 ? 'item' : 'items'}`}</Badge>
-            </Inline>
-            <Text weight="medium">{r.remediation}</Text>
-            <Text size="small" color="color.text.subtle">{`Improves: ${r.forecastImpact}`}</Text>
-            {r.examples.length > 0 ? (
-              <Inline space="space.100" alignBlock="center" shouldWrap>
-                <Text size="small" color="color.text.subtle">Examples:</Text>
-                <TagGroup>
-                  {r.examples.map((e) => (
-                    <Tag key={e} text={e} />
-                  ))}
-                </TagGroup>
+      {rows.map((r, i) => {
+        const keys = keysForRule(violations, r.ruleId)
+        const keyExamples = r.examples.filter(isIssueKey)
+        const textExamples = r.examples.filter((e) => !isIssueKey(e))
+        const openLabel = keys.length < r.violations ? `Open first ${keys.length} in Jira` : `Open ${keys.length} in Jira`
+        return (
+          <Box key={r.ruleId} xcss={rowStyle}>
+            <Stack space="space.100">
+              <Inline spread="space-between" alignBlock="center" shouldWrap>
+                <Inline space="space.150" alignBlock="center" shouldWrap>
+                  <Badge appearance={i === 0 ? 'important' : 'primary'}>{i + 1}</Badge>
+                  <Code>{r.ruleId}</Code>
+                  <Badge appearance="default">{`${r.violations} ${r.violations === 1 ? 'item' : 'items'}`}</Badge>
+                </Inline>
+                {keys.length > 0 ? (
+                  <Button appearance="default" onClick={() => openIssues(keys)} iconAfter="shortcut">
+                    {openLabel}
+                  </Button>
+                ) : null}
               </Inline>
-            ) : null}
-          </Stack>
-        </Box>
-      ))}
+              <Text weight="medium">{r.remediation}</Text>
+              <Text size="small" color="color.text.subtle">{`Improves: ${r.forecastImpact}`}</Text>
+              {keyExamples.length > 0 ? (
+                <Inline space="space.100" alignBlock="center" shouldWrap>
+                  <Text size="small" color="color.text.subtle">Examples:</Text>
+                  {keyExamples.map((e) => (
+                    <IssueChip key={e} issueKey={e} />
+                  ))}
+                </Inline>
+              ) : null}
+              {textExamples.map((e) => (
+                <Text key={e} size="small">{e}</Text>
+              ))}
+            </Stack>
+          </Box>
+        )
+      })}
     </Stack>
   )
 }
@@ -295,12 +409,39 @@ export function ViolationsTable({ rows, max = 100 }: { rows: ViolationRow[]; max
           key: `${v.projectKey}-${v.itemKey ?? 'project'}-${v.ruleId}-${i}`,
           cells: [
             { key: 'project', content: v.projectKey },
-            { key: 'item', content: <Text weight="semibold">{v.itemKey ?? '(project)'}</Text> },
+            { key: 'item', content: v.itemKey ? <IssueLink issueKey={v.itemKey} /> : <Text color="color.text.subtle">(project)</Text> },
             { key: 'rule', content: <Code>{v.ruleId}</Code> },
             { key: 'message', content: v.message },
           ],
         }))}
       />
     </Stack>
+  )
+}
+
+export interface ScanDelta {
+  prevScore: number | null
+  prevFindings: number | null
+  score: number
+  findings: number
+}
+
+const signed = (n: number, digits = 1) => (n > 0 ? `+${n.toFixed(digits)}` : n.toFixed(digits))
+
+export function ScanSummary({ delta, onDismiss }: { delta: ScanDelta; onDismiss: () => void }) {
+  const first = delta.prevScore == null || delta.prevFindings == null
+  const dScore = first ? 0 : delta.score - (delta.prevScore as number)
+  const dFind = first ? 0 : delta.findings - (delta.prevFindings as number)
+  const unchanged = !first && Math.abs(dScore) < 0.05 && dFind === 0
+  const appearance = first || unchanged ? 'information' : dScore >= 0 && dFind <= 0 ? 'success' : 'warning'
+  const body = first
+    ? `Score ${fmt(delta.score)}, ${delta.findings} findings.`
+    : unchanged
+      ? `Nothing changed since the previous scan: score ${fmt(delta.score)}, ${delta.findings} findings.`
+      : `Score ${fmt(delta.prevScore)} to ${fmt(delta.score)} (${signed(dScore)}). Findings ${delta.prevFindings} to ${delta.findings} (${signed(dFind, 0)}).`
+  return (
+    <SectionMessage appearance={appearance} title="Scan finished" actions={<SectionMessageAction onClick={onDismiss}>Dismiss</SectionMessageAction>}>
+      <Text>{body}</Text>
+    </SectionMessage>
   )
 }

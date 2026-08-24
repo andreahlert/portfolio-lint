@@ -57,8 +57,17 @@ export function round1(n: number): number {
 }
 
 export type DimensionScores = Record<Dimension, number | null>
-export type ForecastScores = Record<ForecastType, { score: number | null; label: ForecastLabel | 'n/a' }>
+export interface ForecastCell {
+  score: number | null
+  label: ForecastLabel | 'n/a'
+  /** Rule with the lowest score among the rules feeding this forecast. Absent when nothing is failing. */
+  limitedBy?: string
+}
 
-export function toForecast(score: number | null): { score: number | null; label: ForecastLabel | 'n/a' } {
-  return { score, label: score === null ? 'n/a' : forecastLabel(score) }
+export type ForecastScores = Record<ForecastType, ForecastCell>
+
+export function toForecast(score: number | null, limitedBy?: string): ForecastCell {
+  const cell: ForecastCell = { score, label: score === null ? 'n/a' : forecastLabel(score) }
+  if (limitedBy && score !== null && score < 100) cell.limitedBy = limitedBy
+  return cell
 }

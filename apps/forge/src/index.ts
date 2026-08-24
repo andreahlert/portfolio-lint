@@ -72,7 +72,7 @@ function summarize(report: StoredReport, projectKey?: string) {
     forecasts: scope.forecasts,
     dimensions: scope.dimensions,
     projects: report.projects.map((p) => ({ key: p.key, name: p.name, score: p.score, grade: p.grade, forecasts: p.forecasts })),
-    remediation: report.remediation.slice(0, 5).map((r) => ({
+    remediation: (project?.remediation ?? report.remediation).slice(0, 5).map((r) => ({
       rule: r.ruleId,
       violations: r.violations,
       fix: r.remediation,

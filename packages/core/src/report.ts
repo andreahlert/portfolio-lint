@@ -42,6 +42,8 @@ export interface ProjectReport {
   dimensions: DimensionScores
   forecasts: ForecastScores
   rules: RuleScore[]
+  /** Prioritized fixes for this project only. */
+  remediation: RemediationItem[]
 }
 
 export interface RemediationItem {
@@ -86,7 +88,10 @@ export function lintPortfolio(portfolio: Portfolio, partialConfig: Partial<LintC
     results: rules.map((r) => r.evaluate(project, ctx)),
   }))
 
-  const projects: ProjectReport[] = perProject.map(({ project, results }) => buildProjectReport(project, results, rules))
+  const projects: ProjectReport[] = perProject.map((pp) => ({
+    ...buildProjectReport(pp.project, pp.results, rules),
+    remediation: buildRemediation(rules, [pp]),
+  }))
   const violations = perProject.flatMap((p) => p.results.flatMap((r) => r.violations))
 
   const totalItems = projects.reduce((n, p) => n + p.itemCount, 0)
@@ -100,7 +105,9 @@ export function lintPortfolio(portfolio: Portfolio, partialConfig: Partial<LintC
     projects.map((p) => Object.fromEntries(FORECAST_TYPES.map((f) => [f, p.forecasts[f].score])) as Record<ForecastType, number | null>),
     FORECAST_TYPES,
   )
-  const forecasts = Object.fromEntries(FORECAST_TYPES.map((f) => [f, toForecast(forecastScores[f])])) as ForecastScores
+  const forecasts = Object.fromEntries(
+    FORECAST_TYPES.map((f) => [f, toForecast(forecastScores[f], limitingRule(rules, f, projects))]),
+  ) as ForecastScores
 
   return {
     name: portfolio.name,
@@ -117,7 +124,19 @@ export function lintPortfolio(portfolio: Portfolio, partialConfig: Partial<LintC
   }
 }
 
-function buildProjectReport(project: Project, results: RuleResult[], rules: Rule[]): ProjectReport {
+/** Rule feeding forecast `f` with the lowest mean score across projects. */
+function limitingRule(rules: Rule[], f: ForecastType, projects: ProjectReport[]): string | undefined {
+  let worst: { id: string; score: number } | undefined
+  for (const rule of rules) {
+    if (!rule.forecasts.includes(f)) continue
+    const s = mean(projects.map((p) => p.rules.find((r) => r.id === rule.id)?.score ?? null))
+    if (s === null) continue
+    if (!worst || s < worst.score) worst = { id: rule.id, score: s }
+  }
+  return worst?.id
+}
+
+function buildProjectReport(project: Project, results: RuleResult[], rules: Rule[]): Omit<ProjectReport, 'remediation'> {
   const ruleScores: RuleScore[] = results.map((res, i) => {
     const rule = rules[i] as Rule
     return {
@@ -139,8 +158,10 @@ function buildProjectReport(project: Project, results: RuleResult[], rules: Rule
   const forecasts = Object.fromEntries(
     FORECAST_TYPES.map((f) => {
       const ids = new Set(rules.filter((r) => r.forecasts.includes(f)).map((r) => r.id))
-      const s = min(ruleScores.filter((r) => ids.has(r.id)).map((r) => r.score))
-      return [f, toForecast(s)]
+      const candidates = ruleScores.filter((r) => ids.has(r.id) && r.score !== null)
+      const s = min(candidates.map((r) => r.score))
+      const worst = candidates.find((r) => r.score === s)
+      return [f, toForecast(s, worst?.id)]
     }),
   ) as ForecastScores
 

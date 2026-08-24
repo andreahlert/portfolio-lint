@@ -5,7 +5,6 @@ import ForgeReconciler, {
   Code,
   DynamicTable,
   EmptyState,
-  Heading,
   Inline,
   LoadingButton,
   Lozenge,
@@ -23,14 +22,20 @@ import { invoke } from '@forge/bridge'
 import {
   DimensionBars,
   fmt,
-  formatDate,
+  keysForRule,
+  openIssues,
   Panel,
+  RemediationList,
+  ScanSummary,
+  ScanTime,
   ScoreBar,
   ScoreCards,
   TabBody,
   toneOf,
   ViolationsTable,
   type ForecastSet,
+  type RemediationRow,
+  type ScanDelta,
   type ViolationRow,
 } from './shared'
 
@@ -52,6 +57,7 @@ interface ProjectReport {
   dimensions: Record<string, number>
   forecasts: ForecastSet
   rules: RuleScore[]
+  remediation?: RemediationRow[]
 }
 
 interface ProjectPayload {
@@ -63,7 +69,7 @@ interface ProjectPayload {
 const dimensionAppearance = (d: string) =>
   d === 'completeness' ? 'information' : d === 'freshness' ? 'discovery' : d === 'consistency' ? 'moved' : 'new'
 
-function RulesTable({ rules }: { rules: RuleScore[] }) {
+function RulesTable({ rules, violations }: { rules: RuleScore[]; violations: ViolationRow[] }) {
   return (
     <DynamicTable
       head={{
@@ -74,42 +80,57 @@ function RulesTable({ rules }: { rules: RuleScore[] }) {
           { key: 'applicable', content: 'Checked', isSortable: true },
           { key: 'violations', content: 'Failing', isSortable: true },
           { key: 'score', content: 'Score', isSortable: true },
+          { key: 'open', content: '' },
         ],
       }}
       rows={[...rules]
         .sort((a, b) => (a.score ?? 101) - (b.score ?? 101))
-        .map((r) => ({
-          key: r.id,
-          cells: [
-            { key: 'rule', content: <Code>{r.id}</Code> },
-            { key: 'dimension', content: <Lozenge appearance={dimensionAppearance(r.dimension)}>{r.dimension}</Lozenge> },
-            { key: 'weight', content: String(r.weight) },
-            { key: 'applicable', content: String(r.applicable) },
-            { key: 'violations', content: <Badge appearance={r.violations > 0 ? 'important' : 'default'}>{r.violations}</Badge> },
-            {
-              key: 'score',
-              content:
-                r.score == null ? (
-                  <Text color="color.text.subtle">not applicable</Text>
-                ) : (
-                  <Inline space="space.100" alignBlock="center">
-                    <Text weight="bold" color={`color.text.${toneOf(r.score)}`}>{fmt(r.score)}</Text>
-                    <ScoreBar score={r.score} />
-                  </Inline>
-                ),
-            },
-          ],
-        }))}
+        .map((r) => {
+          const keys = keysForRule(violations, r.id)
+          return {
+            key: r.id,
+            cells: [
+              { key: 'rule', content: <Code>{r.id}</Code> },
+              { key: 'dimension', content: <Lozenge appearance={dimensionAppearance(r.dimension)}>{r.dimension}</Lozenge> },
+              { key: 'weight', content: String(r.weight) },
+              { key: 'applicable', content: String(r.applicable) },
+              { key: 'violations', content: <Badge appearance={r.violations > 0 ? 'important' : 'default'}>{r.violations}</Badge> },
+              {
+                key: 'score',
+                content:
+                  r.score == null ? (
+                    <Text color="color.text.subtle">not applicable</Text>
+                  ) : (
+                    <Inline space="space.100" alignBlock="center">
+                      <Text weight="bold" color={`color.text.${toneOf(r.score)}`}>{fmt(r.score)}</Text>
+                      <ScoreBar score={r.score} />
+                    </Inline>
+                  ),
+              },
+              {
+                key: 'open',
+                content:
+                  keys.length > 0 ? (
+                    <Button appearance="subtle" iconAfter="shortcut" onClick={() => openIssues(keys)}>
+                      {`Open ${keys.length}`}
+                    </Button>
+                  ) : null,
+              },
+            ],
+          }
+        })}
     />
   )
 }
 
 function App() {
   const context = useProductContext()
+  const locale = context?.locale
   const projectKey = (context?.extension as { project?: { key?: string } } | undefined)?.project?.key
   const [data, setData] = useState<ProjectPayload | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [delta, setDelta] = useState<ScanDelta | null>(null)
 
   useEffect(() => {
     if (!projectKey) return
@@ -122,9 +143,21 @@ function App() {
     if (!projectKey) return
     setBusy(true)
     setError(null)
+    setDelta(null)
+    const prev = data
     try {
-      await invoke('scanNow', { projectKeys: [projectKey] })
-      setData(await invoke<ProjectPayload>('getProjectReport', { projectKey }))
+      // Full portfolio scan: a partial scan would replace the stored portfolio report.
+      await invoke('scanNow')
+      const next = await invoke<ProjectPayload>('getProjectReport', { projectKey })
+      setData(next)
+      if (next.project) {
+        setDelta({
+          prevScore: prev?.project?.score ?? null,
+          prevFindings: prev?.project ? prev.violations.length : null,
+          score: next.project.score,
+          findings: next.violations.length,
+        })
+      }
     } catch (e) {
       setError(String(e))
     } finally {
@@ -134,18 +167,22 @@ function App() {
 
   if (!projectKey || (!data && !error)) return <Spinner label="Loading" />
   const p = data?.project ?? null
+  const violations = data?.violations ?? []
 
   return (
     <Stack space="space.300">
       <Inline space="space.200" alignBlock="center" spread="space-between" shouldWrap>
-        <Stack space="space.050">
-          <Heading as="h1" size="large">{p ? `${p.name} AI-readiness` : `${projectKey} AI-readiness`}</Heading>
-          <Text color="color.text.subtle">
-            {p ? `Last scan ${formatDate(data?.scannedAt)}. ${p.itemCount} items, ${data?.violations.length ?? 0} findings.` : 'This project is not in the latest report yet.'}
-          </Text>
-        </Stack>
+        {p ? (
+          <Inline space="space.075" alignBlock="center" shouldWrap>
+            <Text color="color.text.subtle">Last scan</Text>
+            <ScanTime iso={data?.scannedAt} locale={locale} />
+            <Text color="color.text.subtle">{`| ${p.itemCount} items, ${violations.length} ${violations.length === 1 ? 'finding' : 'findings'}. Scans run daily.`}</Text>
+          </Inline>
+        ) : (
+          <Text color="color.text.subtle">This project is not in the latest report yet.</Text>
+        )}
         <LoadingButton appearance="primary" onClick={scan} isLoading={busy}>
-          {p ? 'Scan again' : 'Scan this project'}
+          {p ? 'Scan again' : 'Scan now'}
         </LoadingButton>
       </Inline>
 
@@ -155,11 +192,13 @@ function App() {
         </SectionMessage>
       ) : null}
 
+      {delta ? <ScanSummary delta={delta} onDismiss={() => setDelta(null)} /> : null}
+
       {!p ? (
         <EmptyState
           header="Not scanned yet"
-          description="Scan it now, or wait for the daily portfolio scan."
-          primaryAction={<Button appearance="primary" onClick={scan} isDisabled={busy}>Scan this project</Button>}
+          description="Scan now, or wait for the daily portfolio scan."
+          primaryAction={<Button appearance="primary" onClick={scan} isDisabled={busy}>Scan now</Button>}
         />
       ) : (
         <Stack space="space.300">
@@ -168,17 +207,27 @@ function App() {
           <Panel>
             <Tabs id="project-tabs">
               <TabList>
+                <Tab>Fix first</Tab>
                 <Tab>Rules</Tab>
-                <Tab>{`Findings (${data?.violations.length ?? 0})`}</Tab>
+                <Tab>{`Findings (${violations.length})`}</Tab>
               </TabList>
               <TabPanel>
                 <TabBody>
-                  <RulesTable rules={p.rules} />
+                  {p.remediation ? (
+                    <RemediationList rows={p.remediation} violations={violations} />
+                  ) : (
+                    <Text color="color.text.subtle">Scan again to get a prioritized fix list for this project.</Text>
+                  )}
                 </TabBody>
               </TabPanel>
               <TabPanel>
                 <TabBody>
-                  <ViolationsTable rows={data?.violations ?? []} />
+                  <RulesTable rules={p.rules} violations={violations} />
+                </TabBody>
+              </TabPanel>
+              <TabPanel>
+                <TabBody>
+                  <ViolationsTable rows={violations} />
                 </TabBody>
               </TabPanel>
             </Tabs>
