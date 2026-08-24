@@ -113,6 +113,10 @@ Full detail in [docs/framework.md](docs/framework.md).
 Rovo agent ("Portfolio Readiness Advisor") that answers "what should we fix first" from the latest report.
 Data never leaves Atlassian. See [apps/forge/README.md](apps/forge/README.md).
 
+![Portfolio Readiness page in Jira: score 81.7 grade B, forecast reliability per project, remediation list](docs/img/forge-global-page.jpg)
+
+Screenshot from a Jira Cloud dev site (Portuguese locale) with two seeded projects; the mapper reads issue type hierarchy levels, so localized sites work out of the box.
+
 ## Repository
 
 ```
