@@ -16,3 +16,6 @@ docs/superpowers/
 
 # forge local state
 apps/forge/.forge/
+
+# forge ts-loader emit
+apps/forge/src/**/*.d.ts
