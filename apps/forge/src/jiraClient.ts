@@ -1,6 +1,6 @@
 import api, { route } from '@forge/api'
 import {
-  detectStoryPointsField,
+  detectStoryPointsFields,
   JIRA_BASE_FIELDS,
   mapJiraProject,
   type JiraIssue,
@@ -50,14 +50,14 @@ export async function listProjectKeys(): Promise<string[]> {
   return (page.values ?? []).map((p) => p.key)
 }
 
-export async function fetchStoryPointsField(): Promise<string | undefined> {
+export async function fetchStoryPointsFields(): Promise<string[]> {
   const fields = await getJson<FieldMeta[]>(route`/rest/api/3/field`)
-  return detectStoryPointsField(fields)
+  return detectStoryPointsFields(fields)
 }
 
-export async function fetchProject(key: string, storyPointsField: string | undefined): Promise<Project> {
+export async function fetchProject(key: string, storyPointsFields: string[]): Promise<Project> {
   const meta = await getJson<ProjectMeta>(route`/rest/api/3/project/${key}`)
-  const fields = [...JIRA_BASE_FIELDS, ...(storyPointsField ? [storyPointsField] : [])]
+  const fields = [...JIRA_BASE_FIELDS, ...storyPointsFields]
   const issues: JiraIssue[] = []
   let nextPageToken: string | undefined
   do {
@@ -73,14 +73,14 @@ export async function fetchProject(key: string, storyPointsField: string | undef
     issues.push(...(page.issues ?? []))
     nextPageToken = page.isLast || issues.length >= MAX_ISSUES_PER_PROJECT ? undefined : page.nextPageToken
   } while (nextPageToken)
-  return mapJiraProject({ id: meta.id, key: meta.key, name: meta.name }, issues, { storyPointsField })
+  return mapJiraProject({ id: meta.id, key: meta.key, name: meta.name }, issues, { storyPointsField: storyPointsFields })
 }
 
 export async function fetchPortfolio(projectKeys: string[], name: string): Promise<Portfolio> {
-  const storyPointsField = await fetchStoryPointsField()
+  const storyPointsFields = await fetchStoryPointsFields()
   const projects: Project[] = []
   for (const key of projectKeys.slice(0, MAX_PROJECTS_PER_SCAN)) {
-    projects.push(await fetchProject(key, storyPointsField))
+    projects.push(await fetchProject(key, storyPointsFields))
   }
   return { name, scannedAt: new Date().toISOString(), projects }
 }

@@ -6,7 +6,7 @@ export interface JiraIssue {
   key: string
   fields: {
     summary?: string
-    issuetype?: { name?: string; subtask?: boolean }
+    issuetype?: { name?: string; subtask?: boolean; hierarchyLevel?: number }
     status?: { name?: string; statusCategory?: { key?: string } }
     assignee?: { accountId?: string; displayName?: string } | null
     duedate?: string | null
@@ -26,8 +26,11 @@ export interface JiraIssue {
 }
 
 export interface JiraMapOptions {
-  /** e.g. "customfield_10016". When set and numeric, used as the estimate in points. */
-  storyPointsField?: string
+  /**
+   * e.g. "customfield_10016", or several ids (company-managed "Story Points" and
+   * team-managed "Story point estimate" coexist on many sites). The first numeric value wins.
+   */
+  storyPointsField?: string | string[]
   /** Optional custom field holding the start date (e.g. "customfield_10015"). */
   startDateField?: string
 }
@@ -47,12 +50,22 @@ export const JIRA_BASE_FIELDS = [
   'issuelinks',
 ]
 
-export function mapJiraType(name: string | undefined, subtask?: boolean): ItemType {
-  const n = (name ?? '').toLowerCase()
-  if (n === 'epic') return 'epic'
-  if (n === 'story' || n === 'user story') return 'story'
-  if (n === 'task' || n === 'sub-task' || n === 'subtask' || subtask) return 'task'
-  if (n === 'bug' || n === 'defect') return 'bug'
+const STORY_NAMES = new Set(['story', 'user story', 'história', 'historia', 'historia de usuario', 'histoire', 'user-story'])
+const TASK_NAMES = new Set(['task', 'sub-task', 'subtask', 'tarefa', 'subtarefa', 'tarea', 'subtarea', 'tâche', 'sous-tâche', 'aufgabe', 'unteraufgabe'])
+const BUG_NAMES = new Set(['bug', 'defect', 'erro', 'defeito', 'defecto', 'fehler', 'bogue'])
+
+/**
+ * Maps a Jira issue type to the framework's item type. Uses `hierarchyLevel` when Jira sends it
+ * (1 = epic, -1 = subtask) so localized sites (História, Tarefa, Epic) still map correctly, then
+ * falls back to a small multilingual name table.
+ */
+export function mapJiraType(name: string | undefined, subtask?: boolean, hierarchyLevel?: number): ItemType {
+  const n = (name ?? '').trim().toLowerCase()
+  if (hierarchyLevel === 1 || n === 'epic' || n === 'épico' || n === 'epopeya') return 'epic'
+  if (hierarchyLevel === -1 || subtask) return 'task'
+  if (STORY_NAMES.has(n)) return 'story'
+  if (TASK_NAMES.has(n)) return 'task'
+  if (BUG_NAMES.has(n)) return 'bug'
   return 'other'
 }
 
@@ -68,7 +81,7 @@ export function mapJiraIssue(issue: JiraIssue, opts: JiraMapOptions = {}): WorkI
     id: issue.id,
     key: issue.key,
     title: f.summary ?? '',
-    type: mapJiraType(f.issuetype?.name, f.issuetype?.subtask),
+    type: mapJiraType(f.issuetype?.name, f.issuetype?.subtask, f.issuetype?.hierarchyLevel),
     status: f.status?.name ?? '',
     statusCategory: mapJiraStatusCategory(f.status?.statusCategory?.key),
     dependsOn: [],
@@ -81,8 +94,8 @@ export function mapJiraIssue(issue: JiraIssue, opts: JiraMapOptions = {}): WorkI
   if (f.resolutiondate) item.resolvedAt = f.resolutiondate
   if (f.parent?.id) item.parentId = f.parent.id
 
-  const sp = opts.storyPointsField ? f[opts.storyPointsField] : undefined
-  if (typeof sp === 'number' && !Number.isNaN(sp)) {
+  const sp = readStoryPoints(f, opts.storyPointsField)
+  if (sp !== undefined) {
     item.estimate = sp
   } else if (typeof f.timeoriginalestimate === 'number' && f.timeoriginalestimate > 0) {
     item.estimate = Math.round((f.timeoriginalestimate / 3600) * 100) / 100
@@ -106,6 +119,19 @@ export interface JiraProjectMeta {
   name: string
 }
 
+function storyPointsFieldList(field: string | string[] | undefined): string[] {
+  if (!field) return []
+  return Array.isArray(field) ? field : [field]
+}
+
+function readStoryPoints(fields: JiraIssue['fields'], field: string | string[] | undefined): number | undefined {
+  for (const id of storyPointsFieldList(field)) {
+    const v = fields[id]
+    if (typeof v === 'number' && !Number.isNaN(v)) return v
+  }
+  return undefined
+}
+
 export function mapJiraProject(meta: JiraProjectMeta, issues: JiraIssue[], opts: JiraMapOptions = {}): Project {
   const items = issues.map((i) => mapJiraIssue(i, opts))
   const people = new Map<string, Person>()
@@ -113,7 +139,7 @@ export function mapJiraProject(meta: JiraProjectMeta, issues: JiraIssue[], opts:
     const a = issue.fields.assignee
     if (a?.accountId && !people.has(a.accountId)) people.set(a.accountId, { id: a.accountId, name: a.displayName ?? a.accountId })
   }
-  const hasPoints = !!opts.storyPointsField && items.some((i) => i.estimate !== undefined)
+  const hasPoints = storyPointsFieldList(opts.storyPointsField).length > 0 && items.some((i) => i.estimate !== undefined)
   return {
     id: meta.id,
     key: meta.key,
@@ -126,8 +152,29 @@ export function mapJiraProject(meta: JiraProjectMeta, issues: JiraIssue[], opts:
 }
 
 /** Pick the story points field id from GET /rest/api/3/field output. */
-export function detectStoryPointsField(fields: Array<{ id: string; name?: string; schema?: { type?: string } }>): string | undefined {
-  const candidates = fields.filter((f) => /story\s*point/i.test(f.name ?? ''))
-  const numeric = candidates.find((f) => f.schema?.type === 'number')
-  return (numeric ?? candidates[0])?.id
+export interface JiraFieldMeta {
+  id: string
+  name?: string
+  schema?: { type?: string; custom?: string }
+}
+
+const STORY_POINTS_NAME = /story\s*-?\s*point|story\s*-?\s*punkte|pontos?\s+de\s+hist|puntos?\s+de\s+hist|points?\s+d'hist|punti\s+storia/i
+
+/**
+ * Returns every field that can hold story points, numeric fields first. Matches by Jira's own
+ * custom type key (`jsw-story-points`, used by team-managed projects) and by localized names
+ * (Story Points, Pontos de história, Puntos de historia, Points d'histoire, Story-Punkte).
+ */
+export function detectStoryPointsFields(fields: JiraFieldMeta[]): string[] {
+  const candidates = fields.filter(
+    (f) => STORY_POINTS_NAME.test(f.name ?? '') || /jsw-story-points|gh-story-points/.test(f.schema?.custom ?? ''),
+  )
+  const numeric = candidates.filter((f) => f.schema?.type === 'number')
+  const rest = candidates.filter((f) => f.schema?.type !== 'number')
+  return [...numeric, ...rest].map((f) => f.id)
+}
+
+/** First story points field found, if any. Prefer `detectStoryPointsFields` to read both fields. */
+export function detectStoryPointsField(fields: JiraFieldMeta[]): string | undefined {
+  return detectStoryPointsFields(fields)[0]
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { detectStoryPointsField, mapJiraIssue, mapJiraProject, type JiraIssue } from '../src/jira.js'
+import { detectStoryPointsField, detectStoryPointsFields, mapJiraIssue, mapJiraProject, mapJiraType, type JiraIssue } from '../src/jira.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const fixture = JSON.parse(readFileSync(resolve(here, 'fixtures/jira-search.json'), 'utf8')) as { issues: JiraIssue[] }
@@ -70,5 +70,40 @@ describe('detectStoryPointsField', () => {
     ]
     expect(detectStoryPointsField(fields)).toBe('customfield_10020')
     expect(detectStoryPointsField([{ id: 'summary', name: 'Summary' }])).toBeUndefined()
+  })
+})
+
+describe('detectStoryPointsFields', () => {
+  it('returns every candidate, numeric first, matching localized names and the jsw custom type', () => {
+    const fields = [
+      { id: 'customfield_10046', name: 'Story Points', schema: { type: 'number', custom: 'com.atlassian.jira.plugin.system.customfieldtypes:float' } },
+      { id: 'customfield_10016', name: 'Estimativa de pontos', schema: { type: 'number', custom: 'com.pyxis.greenhopper.jira:jsw-story-points' } },
+      { id: 'customfield_10099', name: 'Pontos de história', schema: { type: 'string' } },
+      { id: 'summary', name: 'Summary' },
+    ]
+    expect(detectStoryPointsFields(fields)).toEqual(['customfield_10046', 'customfield_10016', 'customfield_10099'])
+    expect(detectStoryPointsFields([])).toEqual([])
+  })
+})
+
+describe('mapJiraType on localized sites', () => {
+  it('uses hierarchyLevel before names', () => {
+    expect(mapJiraType('Epic', false, 1)).toBe('epic')
+    expect(mapJiraType('Subtarefa', true, -1)).toBe('task')
+    expect(mapJiraType('História', false, 0)).toBe('story')
+    expect(mapJiraType('Tarefa', false, 0)).toBe('task')
+    expect(mapJiraType('Erro', false, 0)).toBe('bug')
+    expect(mapJiraType('Historia', false)).toBe('story')
+    expect(mapJiraType('Incidente', false, 0)).toBe('other')
+  })
+
+  it('reads the first numeric value across several story points fields', () => {
+    const base: JiraIssue = { id: '1', key: 'X-1', fields: { summary: 's', issuetype: { name: 'História', hierarchyLevel: 0 }, status: { statusCategory: { key: 'new' } } } }
+    const withTeam = { ...base, fields: { ...base.fields, customfield_10016: 5, customfield_10046: null } }
+    const withCompany = { ...base, fields: { ...base.fields, customfield_10016: null, customfield_10046: 8 } }
+    const opts = { storyPointsField: ['customfield_10046', 'customfield_10016'] }
+    expect(mapJiraIssue(withTeam, opts).estimate).toBe(5)
+    expect(mapJiraIssue(withCompany, opts).estimate).toBe(8)
+    expect(mapJiraIssue(withCompany, opts).type).toBe('story')
   })
 })

@@ -1,5 +1,5 @@
 import {
-  detectStoryPointsField,
+  detectStoryPointsFields,
   JIRA_BASE_FIELDS,
   mapJiraProject,
   type JiraIssue,
@@ -21,7 +21,7 @@ export interface JiraConnectOptions {
 export interface JiraFetchResult {
   portfolio: Portfolio
   warnings: string[]
-  storyPointsField?: string
+  storyPointsFields?: string[]
 }
 
 const HINTS: Record<number, string> = {
@@ -88,9 +88,9 @@ export async function fetchJiraPortfolio(opts: JiraConnectOptions): Promise<Jira
   }
 
   const fields = await request<FieldMeta[]>('/rest/api/3/field')
-  const storyPointsField = detectStoryPointsField(fields)
-  if (!storyPointsField) warnings.push('No story points field found; estimates fall back to original time estimate (hours).')
-  const searchFields = [...JIRA_BASE_FIELDS, ...(storyPointsField ? [storyPointsField] : [])]
+  const storyPointsFields = detectStoryPointsFields(fields)
+  if (storyPointsFields.length === 0) warnings.push('No story points field found; estimates fall back to original time estimate (hours).')
+  const searchFields = [...JIRA_BASE_FIELDS, ...storyPointsFields]
 
   const projects: Project[] = []
   for (const key of opts.projects) {
@@ -111,7 +111,7 @@ export async function fetchJiraPortfolio(opts: JiraConnectOptions): Promise<Jira
       nextPageToken = page.isLast ? undefined : page.nextPageToken
     } while (nextPageToken)
     if (issues.length === 0) warnings.push(`Project ${key} has no issues.`)
-    projects.push(mapJiraProject({ id: meta.id, key: meta.key, name: meta.name }, issues, { storyPointsField }))
+    projects.push(mapJiraProject({ id: meta.id, key: meta.key, name: meta.name }, issues, { storyPointsField: storyPointsFields }))
   }
 
   return {
@@ -121,6 +121,6 @@ export async function fetchJiraPortfolio(opts: JiraConnectOptions): Promise<Jira
       projects,
     },
     warnings,
-    ...(storyPointsField ? { storyPointsField } : {}),
+    ...(storyPointsFields.length > 0 ? { storyPointsFields } : {}),
   }
 }

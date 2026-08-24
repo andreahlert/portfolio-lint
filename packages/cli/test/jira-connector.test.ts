@@ -43,7 +43,7 @@ describe('fetchJiraPortfolio', () => {
       return jsonResponse({}, 404)
     })
     const res = await fetchJiraPortfolio({ url: 'acme.atlassian.net', email: 'x@y.z', token: 't', projects: ['DEMO'], fetchImpl: fn, scannedAt: '2026-08-24T00:00:00Z' })
-    expect(res.storyPointsField).toBe('customfield_10016')
+    expect(res.storyPointsFields).toEqual(['customfield_10016'])
     expect(res.portfolio.projects).toHaveLength(1)
     expect(res.portfolio.projects[0]!.items).toHaveLength(5)
     expect(res.portfolio.name).toBe('acme.atlassian.net')
