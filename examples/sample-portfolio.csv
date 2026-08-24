@@ -1,0 +1,34 @@
+project_key,project_name,key,title,type,status,status_category,assignee_id,assignee_name,estimate,estimate_unit,start_date,due_date,parent_key,depends_on,created_at,updated_at,resolved_at,labels
+ALPHA,Customer Platform,ALPHA-1,Onboarding revamp,epic,To Do,todo,,,,points,2026-06-01,2026-10-15,,,2026-05-01,2026-08-10,,onboarding
+ALPHA,Customer Platform,ALPHA-2,Billing migration,epic,In Progress,in_progress,u1,Ana Souza,,points,2026-07-01,,,,2026-05-01,2026-08-20,,billing
+ALPHA,Customer Platform,ALPHA-3,Placeholder: Q4 ideas,epic,To Do,todo,,,,points,,2026-12-01,,,2026-03-15,2026-04-01,,
+ALPHA,Customer Platform,ALPHA-4,Legacy cleanup,epic,Done,done,,,,points,2026-04-01,2026-06-30,,,2026-03-01,2026-07-01,2026-07-01,
+ALPHA,Customer Platform,ALPHA-10,Redesign signup form,story,In Progress,in_progress,u1,Ana Souza,5,points,,,ALPHA-1,,2026-07-10,2026-08-22,,onboarding
+ALPHA,Customer Platform,ALPHA-11,Email verification flow,story,In Progress,in_progress,u1,Ana Souza,8,points,,,ALPHA-1,,2026-07-10,2026-08-21,,onboarding
+ALPHA,Customer Platform,ALPHA-12,Add welcome tour,task,In Progress,in_progress,u1,Ana Souza,3,points,,,ALPHA-1,,2026-07-15,2026-08-23,,
+ALPHA,Customer Platform,ALPHA-13,Signup crashes on Safari,bug,In Progress,in_progress,u1,Ana Souza,2,points,,,ALPHA-1,,2026-08-01,2026-08-23,,
+ALPHA,Customer Platform,ALPHA-14,Import contacts from CSV,story,In Progress,in_progress,,,5,points,,,ALPHA-1,,2026-06-20,2026-07-20,,
+ALPHA,Customer Platform,ALPHA-15,Analytics events for onboarding,story,To Do,todo,,,,points,,,ALPHA-1,,2026-08-01,2026-08-15,,
+ALPHA,Customer Platform,ALPHA-16,Update API docs,task,To Do,todo,,,3,points,,,,,2026-08-01,2026-08-15,,
+ALPHA,Customer Platform,ALPHA-17,Map legacy invoice ids,task,To Do,todo,,,3,points,,2026-08-10,ALPHA-2,,2026-07-01,2026-08-01,,billing
+ALPHA,Customer Platform,ALPHA-18,Migrate all billing tables,story,To Do,todo,,,40,points,,,ALPHA-2,,2026-07-01,2026-08-15,,billing
+ALPHA,Customer Platform,ALPHA-19,Reconcile balances,story,To Do,todo,,,5,points,,,ALPHA-2,ALPHA-99,2026-07-01,2026-08-15,,billing
+ALPHA,Customer Platform,ALPHA-20,Password strength meter,story,Done,done,u2,Bruno Lima,5,points,,,ALPHA-1,,2026-07-01,2026-08-01,,
+ALPHA,Customer Platform,ALPHA-21,Terms acceptance checkbox,story,Done,done,u2,Bruno Lima,3,points,,,ALPHA-1,,2026-07-01,2026-08-01,2026-08-01,
+ALPHA,Customer Platform,ALPHA-22,Archive old invoices,task,To Do,todo,,,2,points,,,ALPHA-2,,2026-07-01,2026-08-01,2026-08-01,billing
+ALPHA,Customer Platform,ALPHA-23,Dual-write invoices,story,To Do,todo,,,5,points,,,ALPHA-2,ALPHA-19,2026-07-01,2026-08-18,,billing
+ALPHA,Customer Platform,ALPHA-24,Social login (Google),story,To Do,todo,,,3,points,,,ALPHA-1,,2026-03-20,2026-04-10,,
+ALPHA,Customer Platform,ALPHA-25,Feature flag for new billing,task,In Progress,in_progress,u2,Bruno Lima,3,points,,,ALPHA-2,,2026-08-10,2026-08-22,,billing
+ALPHA,Customer Platform,ALPHA-26,Remove deprecated endpoints,task,Done,done,u2,Bruno Lima,2,points,,,ALPHA-4,,2026-05-01,2026-06-20,2026-06-20,
+BETA,Data Warehouse,BETA-1,Ingestion pipeline v2,epic,In Progress,in_progress,u3,Carla Mendes,,hours,2026-07-01,2026-11-30,,,2026-06-01,2026-08-20,,data
+BETA,Data Warehouse,BETA-2,Reporting layer,epic,To Do,todo,,,,hours,,2026-12-15,,,2026-06-01,2026-08-01,,data
+BETA,Data Warehouse,BETA-10,Kafka connector for orders,task,In Progress,in_progress,u3,Carla Mendes,16,hours,,,BETA-1,,2026-07-15,2026-08-23,,
+BETA,Data Warehouse,BETA-11,Schema registry setup,task,In Progress,in_progress,u4,Diego Rocha,8,hours,,,BETA-1,,2026-07-15,2026-08-22,,
+BETA,Data Warehouse,BETA-12,Dead letter queue,task,To Do,todo,,,8,hours,,,BETA-1,,2026-08-01,2026-08-20,,
+BETA,Data Warehouse,BETA-13,Replay tooling,task,To Do,todo,,,24,hours,,,BETA-1,BETA-12,2026-08-01,2026-08-20,,
+BETA,Data Warehouse,BETA-14,Semantic layer models,task,To Do,todo,,,8,hours,,,BETA-2,,2026-08-05,2026-08-19,,
+BETA,Data Warehouse,BETA-15,Dashboard templates,task,To Do,todo,,,,hours,,,BETA-2,,2026-08-05,2026-08-19,,
+BETA,Data Warehouse,BETA-16,Duplicate rows on retry,bug,Done,done,u4,Diego Rocha,4,hours,,,BETA-1,,2026-08-10,2026-08-15,2026-08-15,
+BETA,Data Warehouse,BETA-17,Ingestion metrics,task,Done,done,u3,Carla Mendes,8,hours,,,BETA-1,,2026-07-20,2026-08-10,2026-08-10,
+BETA,Data Warehouse,BETA-18,Cost review of cluster,task,To Do,todo,,,8,hours,,,,,2026-08-05,2026-08-19,,
+BETA,Data Warehouse,BETA-19,Row-level security,task,To Do,todo,,,8,hours,,,BETA-2,,2026-08-05,2026-08-19,,

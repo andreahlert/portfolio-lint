@@ -1,0 +1,23 @@
+{
+  "name": "portfolio-lint-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Portfolio AI-Readiness Framework: measure whether your project portfolio data can support AI forecasting and agent-driven execution.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @portfolio-lint/core && npm run build -w portfolio-lint",
+    "test": "npm run test -w @portfolio-lint/core && npm run test -w portfolio-lint",
+    "typecheck": "npm run typecheck -ws --if-present",
+    "lint:forge": "npm run lint -w portfolio-lint-forge",
+    "scan:example": "node packages/cli/dist/bin.js scan --source csv --file examples/sample-portfolio.csv",
+    "docs:rules": "node packages/cli/dist/bin.js rules --format md > docs/rules.md"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

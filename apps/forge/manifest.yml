@@ -1,0 +1,90 @@
+# Atlassian Forge manifest for portfolio-lint.
+# Replace app.id after running `npx forge register` (see README.md).
+modules:
+  jira:globalPage:
+    - key: portfolio-lint-global
+      resource: global-page
+      resolver:
+        function: resolver
+      render: native
+      title: Portfolio Readiness
+  jira:projectPage:
+    - key: portfolio-lint-project
+      resource: project-page
+      resolver:
+        function: resolver
+      render: native
+      title: AI Readiness
+  scheduledTrigger:
+    - key: portfolio-lint-daily
+      function: scheduled
+      interval: day
+  rovo:agent:
+    - key: portfolio-readiness-advisor
+      name: Portfolio Readiness Advisor
+      description: Explains how ready this Jira site is for AI forecasting and what to fix first.
+      prompt: >
+        You are the Portfolio Readiness Advisor. You help PMOs and project managers understand
+        whether their Jira data is good enough for AI-driven schedule, capacity and scope forecasts.
+        Always call get-portfolio-score before answering questions about scores, grades or what to fix.
+        Call explain-rule when the user asks what a rule means or why it matters.
+        Never invent scores. If no report exists yet, tell the user to open the Portfolio Readiness page
+        and run a scan. Present remediation as a short, prioritized list and say which forecast each fix improves.
+        You do not change any Jira data; you only read the latest report.
+      conversationStarters:
+        - How ready is our portfolio for AI forecasting?
+        - What should we fix first to trust schedule forecasts?
+        - Explain the stale-in-progress rule
+      actions:
+        - get-portfolio-score
+        - explain-rule
+  action:
+    - key: get-portfolio-score
+      name: getPortfolioScore
+      function: getPortfolioScore
+      actionVerb: GET
+      description: >
+        Returns the latest Portfolio AI-Readiness report: portfolio score, grade, per-forecast reliability
+        (schedule, capacity, scope), per-project scores and the prioritized remediation list.
+        Optionally filtered to one Jira project key.
+      inputs:
+        projectKey:
+          title: Project key
+          type: string
+          required: false
+          description: Jira project key to focus on, for example ALPHA. Leave empty for the whole portfolio.
+    - key: explain-rule
+      name: explainRule
+      function: explainRule
+      actionVerb: GET
+      description: >
+        Explains one portfolio-lint rule: what it checks, which dimension and forecasts it affects,
+        why it degrades forecasting and how to remediate it.
+      inputs:
+        ruleId:
+          title: Rule id
+          type: string
+          required: true
+          description: Rule identifier such as missing-estimate or stale-in-progress.
+  function:
+    - key: resolver
+      handler: index.handler
+    - key: scheduled
+      handler: index.scheduled
+    - key: getPortfolioScore
+      handler: index.getPortfolioScore
+    - key: explainRule
+      handler: index.explainRule
+resources:
+  - key: global-page
+    path: src/frontend/global-page.tsx
+  - key: project-page
+    path: src/frontend/project-page.tsx
+app:
+  runtime:
+    name: nodejs22.x
+  id: ari:cloud:ecosystem::app/00000000-0000-0000-0000-000000000000
+permissions:
+  scopes:
+    - read:jira-work
+    - storage:app

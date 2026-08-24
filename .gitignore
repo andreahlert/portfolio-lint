@@ -1,0 +1,18 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+coverage/
+
+# agent artifacts (never commit)
+.superpowers/
+.claude/
+CLAUDE.md
+**/settings.local.json
+**/scheduled_tasks.lock
+.apache-steward/
+docs/superpowers/
+
+# forge local state
+apps/forge/.forge/

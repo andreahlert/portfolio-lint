@@ -1,0 +1,97 @@
+{
+  "issues": [
+    {
+      "id": "10001",
+      "key": "DEMO-1",
+      "fields": {
+        "summary": "Checkout redesign",
+        "issuetype": { "name": "Epic", "subtask": false },
+        "status": { "name": "In Progress", "statusCategory": { "key": "indeterminate" } },
+        "assignee": { "accountId": "acc-1", "displayName": "Ana" },
+        "duedate": "2026-10-01",
+        "created": "2026-06-01T10:00:00.000+0000",
+        "updated": "2026-08-20T10:00:00.000+0000",
+        "resolutiondate": null,
+        "parent": null,
+        "labels": ["checkout"],
+        "timeoriginalestimate": null,
+        "issuelinks": []
+      }
+    },
+    {
+      "id": "10002",
+      "key": "DEMO-2",
+      "fields": {
+        "summary": "Cart page",
+        "issuetype": { "name": "Story", "subtask": false },
+        "status": { "name": "To Do", "statusCategory": { "key": "new" } },
+        "assignee": null,
+        "duedate": null,
+        "created": "2026-07-01T10:00:00.000+0000",
+        "updated": "2026-08-01T10:00:00.000+0000",
+        "resolutiondate": null,
+        "parent": { "id": "10001", "key": "DEMO-1" },
+        "labels": [],
+        "customfield_10016": 5,
+        "timeoriginalestimate": 28800,
+        "issuelinks": [
+          { "type": { "name": "Blocks", "inward": "is blocked by", "outward": "blocks" }, "inwardIssue": { "id": "10003", "key": "DEMO-3" } },
+          { "type": { "name": "Relates", "inward": "relates to", "outward": "relates to" }, "inwardIssue": { "id": "10009", "key": "DEMO-9" } }
+        ]
+      }
+    },
+    {
+      "id": "10003",
+      "key": "DEMO-3",
+      "fields": {
+        "summary": "Payment API",
+        "issuetype": { "name": "Task", "subtask": false },
+        "status": { "name": "Done", "statusCategory": { "key": "done" } },
+        "assignee": { "accountId": "acc-2", "displayName": "Bruno" },
+        "duedate": null,
+        "created": "2026-07-01T10:00:00.000+0000",
+        "updated": "2026-08-10T10:00:00.000+0000",
+        "resolutiondate": "2026-08-10T10:00:00.000+0000",
+        "parent": { "id": "10001", "key": "DEMO-1" },
+        "labels": [],
+        "customfield_10016": null,
+        "timeoriginalestimate": 7200,
+        "issuelinks": [
+          { "type": { "name": "Blocks", "inward": "is blocked by", "outward": "blocks" }, "outwardIssue": { "id": "10002", "key": "DEMO-2" } }
+        ]
+      }
+    },
+    {
+      "id": "10004",
+      "key": "DEMO-4",
+      "fields": {
+        "summary": "Fix rounding",
+        "issuetype": { "name": "Bug", "subtask": false },
+        "status": { "name": "In Progress", "statusCategory": { "key": "indeterminate" } },
+        "assignee": { "accountId": "acc-2", "displayName": "Bruno" },
+        "duedate": "2026-08-01",
+        "created": "2026-07-20T10:00:00.000+0000",
+        "updated": "2026-08-22T10:00:00.000+0000",
+        "resolutiondate": null,
+        "parent": { "id": "10001", "key": "DEMO-1" },
+        "labels": ["p1"],
+        "customfield_10016": 2,
+        "issuelinks": []
+      }
+    },
+    {
+      "id": "10005",
+      "key": "DEMO-5",
+      "fields": {
+        "summary": "Write tests",
+        "issuetype": { "name": "Sub-task", "subtask": true },
+        "status": { "name": "To Do", "statusCategory": { "key": "new" } },
+        "assignee": null,
+        "created": "2026-08-01T10:00:00.000+0000",
+        "updated": "2026-08-01T10:00:00.000+0000",
+        "parent": { "id": "10004", "key": "DEMO-4" },
+        "customfield_10016": "not a number"
+      }
+    }
+  ]
+}
