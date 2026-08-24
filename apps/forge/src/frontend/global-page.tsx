@@ -1,7 +1,39 @@
 import React, { useEffect, useState } from 'react'
-import ForgeReconciler, { Button, DynamicTable, Heading, Inline, Lozenge, SectionMessage, Spinner, Stack, Text } from '@forge/react'
+import ForgeReconciler, {
+  Button,
+  DynamicTable,
+  EmptyState,
+  Heading,
+  Inline,
+  LineChart,
+  LoadingButton,
+  Lozenge,
+  SectionMessage,
+  Spinner,
+  Stack,
+  Tab,
+  TabList,
+  TabPanel,
+  Tabs,
+  Text,
+} from '@forge/react'
 import { invoke } from '@forge/bridge'
-import { fmt, gradeAppearance, RemediationTable, ScoreHeadline, ViolationsTable, type ForecastSet, type RemediationRow, type ViolationRow } from './shared'
+import {
+  DimensionBars,
+  ForecastLozenges,
+  fmt,
+  formatDate,
+  gradeAppearance,
+  Panel,
+  RemediationList,
+  ScoreBar,
+  ScoreCards,
+  TabBody,
+  ViolationsTable,
+  type ForecastSet,
+  type RemediationRow,
+  type ViolationRow,
+} from './shared'
 
 interface ProjectRow {
   key: string
@@ -36,6 +68,74 @@ interface ReportPayload {
   history: HistoryPoint[]
 }
 
+function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
+  return (
+    <DynamicTable
+      head={{
+        cells: [
+          { key: 'key', content: 'Project', isSortable: true },
+          { key: 'items', content: 'Items', isSortable: true },
+          { key: 'score', content: 'Score', isSortable: true },
+          { key: 'grade', content: 'Grade' },
+          { key: 'forecasts', content: 'Forecasts' },
+        ],
+      }}
+      rows={[...projects]
+        .sort((a, b) => a.score - b.score)
+        .map((p) => ({
+          key: p.key,
+          cells: [
+            {
+              key: 'key',
+              content: (
+                <Stack space="space.0">
+                  <Text weight="semibold">{p.key}</Text>
+                  <Text size="small" color="color.text.subtle">{p.name}</Text>
+                </Stack>
+              ),
+            },
+            { key: 'items', content: String(p.itemCount) },
+            {
+              key: 'score',
+              content: (
+                <Inline space="space.100" alignBlock="center">
+                  <Text weight="bold">{fmt(p.score)}</Text>
+                  <ScoreBar score={p.score} />
+                </Inline>
+              ),
+            },
+            { key: 'grade', content: <Lozenge appearance={gradeAppearance(p.grade)} isBold>{p.grade}</Lozenge> },
+            { key: 'forecasts', content: <ForecastLozenges forecasts={p.forecasts} /> },
+          ],
+        }))}
+    />
+  )
+}
+
+function History({ history }: { history: HistoryPoint[] }) {
+  if (history.length < 2) {
+    return <Text color="color.text.subtle">The trend appears after the second scan. The daily scheduled scan builds it automatically.</Text>
+  }
+  const data = history.map((h) => ({ date: h.scannedAt.slice(0, 16).replace('T', ' '), score: Math.round(h.score * 10) / 10 }))
+  return (
+    <Stack space="space.200">
+      <LineChart data={data} xAccessor="date" yAccessor="score" height={280} title="Portfolio score over time" />
+      <DynamicTable
+        rowsPerPage={10}
+        head={{ cells: [{ key: 'when', content: 'Scan' }, { key: 'score', content: 'Score' }, { key: 'grade', content: 'Grade' }] }}
+        rows={[...history].reverse().map((h) => ({
+          key: h.scannedAt,
+          cells: [
+            { key: 'when', content: formatDate(h.scannedAt) },
+            { key: 'score', content: fmt(h.score) },
+            { key: 'grade', content: <Lozenge appearance={gradeAppearance(h.grade)}>{h.grade}</Lozenge> },
+          ],
+        }))}
+      />
+    </Stack>
+  )
+}
+
 function App() {
   const [data, setData] = useState<ReportPayload | null>(null)
   const [busy, setBusy] = useState(false)
@@ -59,63 +159,76 @@ function App() {
     }
   }
 
-  if (error) return <SectionMessage appearance="error" title="Scan failed"><Text>{error}</Text></SectionMessage>
-  if (!data) return <Spinner label="Loading report" />
-  const r = data.report
+  if (!data && !error) return <Spinner label="Loading report" />
+  const r = data?.report ?? null
 
   return (
     <Stack space="space.300">
-      <Inline space="space.200" alignBlock="center" spread="space-between">
-        <Heading as="h1">Portfolio AI-Readiness</Heading>
-        <Button appearance="primary" onClick={scan} isDisabled={busy}>{busy ? 'Scanning' : 'Scan now'}</Button>
+      <Inline space="space.200" alignBlock="center" spread="space-between" shouldWrap>
+        <Stack space="space.050">
+          <Heading as="h1" size="large">Portfolio AI-Readiness</Heading>
+          <Text color="color.text.subtle">
+            {r
+              ? `Last scan ${formatDate(r.scannedAt)}. ${r.projects.length} ${r.projects.length === 1 ? 'project' : 'projects'}, ${r.violationCount} ${r.violationCount === 1 ? 'finding' : 'findings'}.`
+              : 'Scores how well your Jira data can feed an AI forecast, and tells you what to fix first.'}
+          </Text>
+        </Stack>
+        <LoadingButton appearance="primary" onClick={scan} isLoading={busy}>
+          {r ? 'Scan again' : 'Scan now'}
+        </LoadingButton>
       </Inline>
-      {!r ? (
-        <SectionMessage appearance="information" title="No report yet">
-          <Text>Run a scan to score every project this app can read. A daily scheduled scan keeps it fresh afterwards.</Text>
+
+      {error ? (
+        <SectionMessage appearance="error" title="Scan failed">
+          <Text>{error}</Text>
         </SectionMessage>
+      ) : null}
+
+      {!r ? (
+        <EmptyState
+          header="No report yet"
+          description="Run a scan to score every project this app can read. A daily scheduled scan keeps it fresh afterwards."
+          primaryAction={<Button appearance="primary" onClick={scan} isDisabled={busy}>Scan now</Button>}
+        />
       ) : (
         <Stack space="space.300">
-          <Text>{`Scanned ${r.scannedAt}. ${r.projects.length} projects, ${r.violationCount} violations.`}</Text>
-          <ScoreHeadline score={r.score} grade={r.grade} forecasts={r.forecasts} />
-          <Inline space="space.200">
-            {Object.entries(r.dimensions).map(([d, s]) => (
-              <Text key={d}>{`${d}: ${fmt(s)}`}</Text>
-            ))}
-          </Inline>
-          <DynamicTable
-            caption="Projects"
-            head={{
-              cells: [
-                { key: 'key', content: 'Project' },
-                { key: 'items', content: 'Items' },
-                { key: 'score', content: 'Score' },
-                { key: 'grade', content: 'Grade' },
-                { key: 'schedule', content: 'Schedule' },
-                { key: 'capacity', content: 'Capacity' },
-                { key: 'scope', content: 'Scope' },
-              ],
-            }}
-            rows={r.projects.map((p) => ({
-              key: p.key,
-              cells: [
-                { key: 'key', content: `${p.key} (${p.name})` },
-                { key: 'items', content: String(p.itemCount) },
-                { key: 'score', content: fmt(p.score) },
-                { key: 'grade', content: <Lozenge appearance={gradeAppearance(p.grade)}>{p.grade}</Lozenge> },
-                { key: 'schedule', content: p.forecasts.schedule.label },
-                { key: 'capacity', content: p.forecasts.capacity.label },
-                { key: 'scope', content: p.forecasts.scope.label },
-              ],
-            }))}
+          <ScoreCards
+            score={r.score}
+            grade={r.grade}
+            forecasts={r.forecasts}
+            subtitle={`${r.projects.reduce((n, p) => n + p.itemCount, 0)} items across ${r.projects.length} ${r.projects.length === 1 ? 'project' : 'projects'}`}
           />
-          <RemediationTable rows={r.remediation} />
-          <ViolationsTable rows={r.violations} />
-          {data.history.length > 1 ? (
-            <Stack space="space.050">
-              <Heading as="h3">Trend</Heading>
-              <Text>{data.history.map((h) => `${h.scannedAt.slice(0, 10)}: ${fmt(h.score)} (${h.grade})`).join('  |  ')}</Text>
-            </Stack>
-          ) : null}
+          <DimensionBars dimensions={r.dimensions} />
+          <Panel>
+            <Tabs id="portfolio-tabs">
+              <TabList>
+                <Tab>Fix first</Tab>
+                <Tab>Projects</Tab>
+                <Tab>{`All findings (${r.violationCount})`}</Tab>
+                <Tab>History</Tab>
+              </TabList>
+              <TabPanel>
+                <TabBody>
+                  <RemediationList rows={r.remediation} />
+                </TabBody>
+              </TabPanel>
+              <TabPanel>
+                <TabBody>
+                  <ProjectsTable projects={r.projects} />
+                </TabBody>
+              </TabPanel>
+              <TabPanel>
+                <TabBody>
+                  <ViolationsTable rows={r.violations} />
+                </TabBody>
+              </TabPanel>
+              <TabPanel>
+                <TabBody>
+                  <History history={data?.history ?? []} />
+                </TabBody>
+              </TabPanel>
+            </Tabs>
+          </Panel>
         </Stack>
       )}
     </Stack>
