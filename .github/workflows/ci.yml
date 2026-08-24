@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm test
+      - run: npm run typecheck -w portfolio-lint-forge
+      - run: npm run validate:manifest -w portfolio-lint-forge
+      - name: Scan the example portfolio
+        run: node packages/cli/dist/bin.js scan --file examples/sample-portfolio.csv --now 2026-08-24T00:00:00Z --fail-under 80
+      - name: Rules doc is up to date
+        run: |
+          node packages/cli/dist/bin.js rules --format md > /tmp/rules.md
+          diff -u docs/rules.md /tmp/rules.md

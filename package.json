@@ -14,7 +14,8 @@
     "typecheck": "npm run typecheck -ws --if-present",
     "lint:forge": "npm run lint -w portfolio-lint-forge",
     "scan:example": "node packages/cli/dist/bin.js scan --source csv --file examples/sample-portfolio.csv",
-    "docs:rules": "node packages/cli/dist/bin.js rules --format md > docs/rules.md"
+    "docs:rules": "node packages/cli/dist/bin.js rules --format md > docs/rules.md",
+    "validate:manifest": "npm run validate:manifest -w portfolio-lint-forge"
   },
   "engines": {
     "node": ">=20"

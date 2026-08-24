@@ -1,5 +1,7 @@
 # portfolio-lint
 
+[![CI](https://github.com/andreahlert/portfolio-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/andreahlert/portfolio-lint/actions/workflows/ci.yml) MIT licensed.
+
 Lint your project portfolio before you let AI forecast it.
 
 `portfolio-lint` is the reference implementation of the **Portfolio AI-Readiness Framework**:
