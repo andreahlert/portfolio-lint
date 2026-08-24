@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react'
 import ForgeReconciler, {
   Badge,
   Button,
-  Code,
   DynamicTable,
   EmptyState,
   Inline,
@@ -26,6 +25,8 @@ import {
   openIssues,
   Panel,
   RemediationList,
+  RuleCode,
+  RuleDocLink,
   ScanSummary,
   ScanTime,
   ScoreBar,
@@ -35,7 +36,10 @@ import {
   ViolationsTable,
   type ForecastSet,
   type RemediationRow,
+  type RuleMap,
+  type RuleMeta,
   type ScanDelta,
+  toRuleMap,
   type ViolationRow,
 } from './shared'
 
@@ -69,7 +73,7 @@ interface ProjectPayload {
 const dimensionAppearance = (d: string) =>
   d === 'completeness' ? 'information' : d === 'freshness' ? 'discovery' : d === 'consistency' ? 'moved' : 'new'
 
-function RulesTable({ rules, violations }: { rules: RuleScore[]; violations: ViolationRow[] }) {
+function RulesTable({ rules, violations, meta }: { rules: RuleScore[]; violations: ViolationRow[]; meta?: RuleMap }) {
   return (
     <DynamicTable
       head={{
@@ -90,7 +94,15 @@ function RulesTable({ rules, violations }: { rules: RuleScore[]; violations: Vio
           return {
             key: r.id,
             cells: [
-              { key: 'rule', content: <Code>{r.id}</Code> },
+              {
+                key: 'rule',
+                content: (
+                  <Inline space="space.100" alignBlock="center">
+                    <RuleCode ruleId={r.id} rules={meta} />
+                    <RuleDocLink ruleId={r.id} />
+                  </Inline>
+                ),
+              },
               { key: 'dimension', content: <Lozenge appearance={dimensionAppearance(r.dimension)}>{r.dimension}</Lozenge> },
               { key: 'weight', content: String(r.weight) },
               { key: 'applicable', content: String(r.applicable) },
@@ -131,12 +143,16 @@ function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [delta, setDelta] = useState<ScanDelta | null>(null)
+  const [rules, setRules] = useState<RuleMap | undefined>(undefined)
 
   useEffect(() => {
     if (!projectKey) return
     invoke<ProjectPayload>('getProjectReport', { projectKey })
       .then(setData)
       .catch((e: unknown) => setError(String(e)))
+    invoke<RuleMeta[]>('listRules')
+      .then((list) => setRules(toRuleMap(list)))
+      .catch(() => undefined)
   }, [projectKey])
 
   const scan = async () => {
@@ -214,7 +230,7 @@ function App() {
               <TabPanel>
                 <TabBody>
                   {p.remediation ? (
-                    <RemediationList rows={p.remediation} violations={violations} />
+                    <RemediationList rows={p.remediation} violations={violations} rules={rules} />
                   ) : (
                     <Text color="color.text.subtle">Scan again to get a prioritized fix list for this project.</Text>
                   )}
@@ -222,12 +238,12 @@ function App() {
               </TabPanel>
               <TabPanel>
                 <TabBody>
-                  <RulesTable rules={p.rules} violations={violations} />
+                  <RulesTable rules={p.rules} violations={violations} meta={rules} />
                 </TabBody>
               </TabPanel>
               <TabPanel>
                 <TabBody>
-                  <ViolationsTable rows={violations} />
+                  <ViolationsTable rows={violations} rules={rules} />
                 </TabBody>
               </TabPanel>
             </Tabs>

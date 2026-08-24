@@ -35,7 +35,10 @@ import {
   ViolationsTable,
   type ForecastSet,
   type RemediationRow,
+  type RuleMap,
+  type RuleMeta,
   type ScanDelta,
+  toRuleMap,
   type ViolationRow,
 } from './shared'
 
@@ -158,11 +161,15 @@ function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [delta, setDelta] = useState<ScanDelta | null>(null)
+  const [rules, setRules] = useState<RuleMap | undefined>(undefined)
 
   useEffect(() => {
     invoke<ReportPayload>('getReport')
       .then(setData)
       .catch((e: unknown) => setError(String(e)))
+    invoke<RuleMeta[]>('listRules')
+      .then((list) => setRules(toRuleMap(list)))
+      .catch(() => undefined)
   }, [])
 
   const scan = async () => {
@@ -243,7 +250,7 @@ function App() {
               </TabList>
               <TabPanel>
                 <TabBody>
-                  <RemediationList rows={r.remediation} violations={r.violations} />
+                  <RemediationList rows={r.remediation} violations={r.violations} rules={rules} />
                 </TabBody>
               </TabPanel>
               <TabPanel>
@@ -253,7 +260,7 @@ function App() {
               </TabPanel>
               <TabPanel>
                 <TabBody>
-                  <ViolationsTable rows={r.violations} />
+                  <ViolationsTable rows={r.violations} rules={rules} />
                 </TabBody>
               </TabPanel>
               <TabPanel>

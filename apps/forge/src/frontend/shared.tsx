@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import {
   Badge,
   Box,
@@ -8,10 +8,12 @@ import {
   Heading,
   Icon,
   Inline,
+  Link,
   Lozenge,
   Pressable,
   ProgressBar,
   SectionMessage,
+  Select,
   SectionMessageAction,
   Stack,
   Text,
@@ -48,6 +50,22 @@ export interface ViolationRow {
   itemKey?: string
   message: string
 }
+
+export interface RuleMeta {
+  id: string
+  dimension: string
+  weight: number
+  forecasts: string[]
+  description: string
+  forecastImpact: string
+  remediation: string
+}
+
+export type RuleMap = Record<string, RuleMeta>
+
+export const toRuleMap = (rules: RuleMeta[]): RuleMap => Object.fromEntries(rules.map((r) => [r.id, r]))
+
+export const RULES_DOC_URL = 'https://github.com/andreahlert/portfolio-lint/blob/main/docs/rules.md'
 
 export type Tone = 'success' | 'warning' | 'danger'
 
@@ -151,6 +169,25 @@ export function keysForRule(violations: ViolationRow[], ruleId: string): string[
     if (v.ruleId === ruleId && v.itemKey && !seen.has(v.itemKey)) seen.add(v.itemKey)
   }
   return [...seen]
+}
+
+/** Rule id with a tooltip explaining what the rule checks. */
+export function RuleCode({ ruleId, rules }: { ruleId: string; rules?: RuleMap }) {
+  const meta = rules?.[ruleId]
+  if (!meta) return <Code>{ruleId}</Code>
+  return (
+    <Tooltip content={`${meta.description} Dimension: ${meta.dimension}, weight ${meta.weight}.`} position="bottom">
+      <Code>{ruleId}</Code>
+    </Tooltip>
+  )
+}
+
+export function RuleDocLink({ ruleId }: { ruleId: string }) {
+  return (
+    <Link href={`${RULES_DOC_URL}#${ruleId}`} openNewTab>
+      Docs
+    </Link>
+  )
 }
 
 const toneIcon = {
@@ -336,7 +373,7 @@ const rowStyle = xcss({
   padding: 'space.200',
 })
 
-export function RemediationList({ rows, violations }: { rows: RemediationRow[]; violations: ViolationRow[] }) {
+export function RemediationList({ rows, violations, rules }: { rows: RemediationRow[]; violations: ViolationRow[]; rules?: RuleMap }) {
   if (rows.length === 0) {
     return (
       <Inline space="space.100" alignBlock="center">
@@ -359,8 +396,9 @@ export function RemediationList({ rows, violations }: { rows: RemediationRow[]; 
               <Inline spread="space-between" alignBlock="center" shouldWrap>
                 <Inline space="space.150" alignBlock="center" shouldWrap>
                   <Badge appearance={i === 0 ? 'important' : 'primary'}>{i + 1}</Badge>
-                  <Code>{r.ruleId}</Code>
+                  <RuleCode ruleId={r.ruleId} rules={rules} />
                   <Badge appearance="default">{`${r.violations} ${r.violations === 1 ? 'item' : 'items'}`}</Badge>
+                  <RuleDocLink ruleId={r.ruleId} />
                 </Inline>
                 {keys.length > 0 ? (
                   <Button appearance="default" onClick={() => openIssues(keys)} iconAfter="shortcut">
@@ -389,32 +427,99 @@ export function RemediationList({ rows, violations }: { rows: RemediationRow[]; 
   )
 }
 
-export function ViolationsTable({ rows, max = 100 }: { rows: ViolationRow[]; max?: number }) {
-  if (rows.length === 0) return <Text color="color.text.subtle">No findings.</Text>
-  const shown = rows.slice(0, max)
+interface Option {
+  label: string
+  value: string
+}
+
+const filterStyle = xcss({ minWidth: '200px' })
+
+function FilterSelect({ placeholder, options, value, onChange }: { placeholder: string; options: Option[]; value: string | null; onChange: (v: string | null) => void }) {
+  const selected = options.find((o) => o.value === value) ?? null
   return (
-    <Stack space="space.100">
-      {rows.length > max ? <Text color="color.text.subtle">{`Showing first ${max} of ${rows.length} findings.`}</Text> : null}
-      <DynamicTable
-        rowsPerPage={20}
-        head={{
-          cells: [
-            { key: 'project', content: 'Project', isSortable: true },
-            { key: 'item', content: 'Item', isSortable: true },
-            { key: 'rule', content: 'Rule', isSortable: true },
-            { key: 'message', content: 'What is wrong' },
-          ],
-        }}
-        rows={shown.map((v, i) => ({
-          key: `${v.projectKey}-${v.itemKey ?? 'project'}-${v.ruleId}-${i}`,
-          cells: [
-            { key: 'project', content: v.projectKey },
-            { key: 'item', content: v.itemKey ? <IssueLink issueKey={v.itemKey} /> : <Text color="color.text.subtle">(project)</Text> },
-            { key: 'rule', content: <Code>{v.ruleId}</Code> },
-            { key: 'message', content: v.message },
-          ],
-        }))}
+    <Box xcss={filterStyle}>
+      <Select
+        placeholder={placeholder}
+        options={options}
+        value={selected}
+        isClearable
+        spacing="compact"
+        onChange={(opt: unknown) => onChange((opt as Option | null)?.value ?? null)}
       />
+    </Box>
+  )
+}
+
+const capitalizeWord = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+export function ViolationsTable({ rows, rules, max = 100 }: { rows: ViolationRow[]; rules?: RuleMap; max?: number }) {
+  const [project, setProject] = useState<string | null>(null)
+  const [dimension, setDimension] = useState<string | null>(null)
+  const [rule, setRule] = useState<string | null>(null)
+
+  if (rows.length === 0) return <Text color="color.text.subtle">No findings.</Text>
+
+  const projects = [...new Set(rows.map((v) => v.projectKey))].sort()
+  const ruleIds = [...new Set(rows.map((v) => v.ruleId))].sort()
+  const dimensions = rules ? [...new Set(ruleIds.map((id) => rules[id]?.dimension).filter((d): d is string => Boolean(d)))].sort() : []
+
+  const filtered = rows.filter(
+    (v) =>
+      (project === null || v.projectKey === project) &&
+      (rule === null || v.ruleId === rule) &&
+      (dimension === null || rules?.[v.ruleId]?.dimension === dimension),
+  )
+  const shown = filtered.slice(0, max)
+  const active = project !== null || dimension !== null || rule !== null
+  const clear = () => {
+    setProject(null)
+    setDimension(null)
+    setRule(null)
+  }
+
+  return (
+    <Stack space="space.150">
+      <Inline space="space.100" alignBlock="center" shouldWrap>
+        {projects.length > 1 ? (
+          <FilterSelect placeholder="All projects" options={projects.map((p) => ({ label: p, value: p }))} value={project} onChange={setProject} />
+        ) : null}
+        {dimensions.length > 1 ? (
+          <FilterSelect placeholder="All dimensions" options={dimensions.map((d) => ({ label: capitalizeWord(d), value: d }))} value={dimension} onChange={setDimension} />
+        ) : null}
+        <FilterSelect placeholder="All rules" options={ruleIds.map((r) => ({ label: r, value: r }))} value={rule} onChange={setRule} />
+        {active ? (
+          <Button appearance="subtle" onClick={clear}>
+            Clear
+          </Button>
+        ) : null}
+        <Text color="color.text.subtle">
+          {filtered.length > max ? `Showing first ${max} of ${filtered.length} findings.` : active ? `${filtered.length} of ${rows.length} findings.` : `${rows.length} findings.`}
+        </Text>
+      </Inline>
+      {filtered.length === 0 ? (
+        <Text color="color.text.subtle">No findings match these filters.</Text>
+      ) : (
+        <DynamicTable
+          rowsPerPage={20}
+          head={{
+            cells: [
+              { key: 'project', content: 'Project', isSortable: true },
+              { key: 'item', content: 'Item', isSortable: true },
+              { key: 'rule', content: 'Rule', isSortable: true },
+              { key: 'message', content: 'What is wrong' },
+            ],
+          }}
+          rows={shown.map((v, i) => ({
+            key: `${v.projectKey}-${v.itemKey ?? 'project'}-${v.ruleId}-${i}`,
+            cells: [
+              { key: 'project', content: v.projectKey },
+              { key: 'item', content: v.itemKey ? <IssueLink issueKey={v.itemKey} /> : <Text color="color.text.subtle">(project)</Text> },
+              { key: 'rule', content: <RuleCode ruleId={v.ruleId} rules={rules} /> },
+              { key: 'message', content: v.message },
+            ],
+          }))}
+        />
+      )}
     </Stack>
   )
 }
