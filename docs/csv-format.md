@@ -53,3 +53,11 @@ With `--now 2026-08-24T00:00:00Z` and default config the expected counts are:
 | status-resolution-mismatch | 2 (ALPHA-20, ALPHA-22) | 0 |
 
 Total: 16 violations.
+
+## Larger example
+
+`examples/erp-portfolio.csv` is a generated ERP programme (8 projects, about 3,600 rows) with
+dependency chains inside and across projects. Regenerate it with `npm run gen:erp`; the
+generator accepts `--seed`, `--scale` and `--now`. Cross-project `depends_on` keys are kept
+as given and surface as `broken-dependency`, which is how the rule treats any blocker outside
+the item's project.

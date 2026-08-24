@@ -63,6 +63,17 @@ Any tool works if you can produce the columns in [docs/csv-format.md](docs/csv-f
 node packages/cli/dist/bin.js scan --file export.csv --format json --out readiness.json
 ```
 
+### Try it on a realistic portfolio
+
+`examples/erp-portfolio.csv` is a synthetic SAP-style ERP programme: 8 workstreams (finance, supply chain, manufacturing, HR, integrations, data migration, analytics, PMO), about 3,600 items, 3,300 dependency links (some across projects), and hygiene noise that differs per workstream. It is generated, deterministic and free of real data.
+
+```bash
+npm run scan:erp                     # scan it
+npm run gen:erp                      # regenerate (see scripts/gen-erp-portfolio.mjs for --seed, --scale, --now)
+```
+
+`scripts/seed-jira-from-csv.py` loads any portfolio-lint CSV into a Jira Cloud site (projects, epics, links, transitions) to try the Forge app at scale.
+
 ### Gate it
 
 ```bash
@@ -124,7 +135,8 @@ packages/core   rules, scorer, canonical model, CSV parser, Jira mapper (no I/O)
 packages/cli    portfolio-lint command: Jira connector, renderers, config
 apps/forge      Jira Cloud app (UI Kit, scheduled trigger, Rovo agent)
 docs/           framework, rules, csv-format, governance, design
-examples/       sample portfolio with planted violations
+examples/       sample portfolio with planted violations, generated ERP programme (3.6k items)
+scripts/        ERP portfolio generator, Jira seeder
 ```
 
 ```bash

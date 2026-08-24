@@ -14,6 +14,8 @@
     "typecheck": "npm run typecheck -ws --if-present",
     "lint:forge": "npm run lint -w portfolio-lint-forge",
     "scan:example": "node packages/cli/dist/bin.js scan --source csv --file examples/sample-portfolio.csv",
+    "gen:erp": "node scripts/gen-erp-portfolio.mjs --out examples/erp-portfolio.csv --seed 42 --now 2026-08-24 --scale 1.8",
+    "scan:erp": "node packages/cli/dist/bin.js scan --source csv --file examples/erp-portfolio.csv --now 2026-08-24T00:00:00Z --name \"Aurora ERP\"",
     "docs:rules": "node packages/cli/dist/bin.js rules --format md > docs/rules.md",
     "validate:manifest": "npm run validate:manifest -w portfolio-lint-forge"
   },
