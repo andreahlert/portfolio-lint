@@ -76,11 +76,37 @@ async function editFields(issueKey: string, fields: Record<string, unknown>): Pr
   return jsonRequest(route`/rest/api/3/issue/${issueKey}`, { method: 'PUT', body: { fields } })
 }
 
-/** Writes the estimate to the first story points field the issue accepts, else to the original time estimate (hours). */
+/**
+ * Writes the estimate where the scan will read it. The mapper takes the first story points field holding a number,
+ * so every field that already has a value is overwritten (sites often carry both the company-managed and the
+ * team-managed field); an issue estimated in time keeps using time. Only unestimated issues fall through to
+ * "first field that accepts the value".
+ */
 async function setEstimate(issueKey: string, value: number): Promise<FixResult> {
   if (!Number.isFinite(value) || value <= 0) throw new FixError('Estimate must be a positive number')
   const fields = await fetchStoryPointsFields()
+  const current = await currentEstimates(issueKey, fields)
+  const filled = fields.filter((f) => typeof current[f] === 'number')
   let lastError = ''
+  if (filled.length > 0) {
+    const res = await editFields(issueKey, Object.fromEntries(filled.map((f) => [f, value])))
+    if (res.ok) return { ok: true, note: `Story points set to ${value}` }
+    lastError = await jiraErrorText(res)
+    // A field missing from the edit screen fails the whole edit; retry one by one and accept partial success.
+    let written = 0
+    for (const field of filled) {
+      const one = await editFields(issueKey, { [field]: value })
+      if (one.ok) written++
+      else lastError = await jiraErrorText(one)
+    }
+    if (written > 0) return { ok: true, note: `Story points set to ${value}${written < filled.length ? ` (${written} of ${filled.length} fields)` : ''}` }
+    throw new FixError(lastError)
+  }
+  if (typeof current.timeoriginalestimate === 'number' && current.timeoriginalestimate > 0) {
+    const res = await editFields(issueKey, { timetracking: { originalEstimate: `${value}h` } })
+    if (res.ok) return { ok: true, note: `Original estimate set to ${value}h` }
+    throw new FixError(await jiraErrorText(res))
+  }
   for (const field of fields) {
     const res = await editFields(issueKey, { [field]: value })
     if (res.ok) return { ok: true, note: `Story points set to ${value}` }
@@ -89,6 +115,15 @@ async function setEstimate(issueKey: string, value: number): Promise<FixResult> 
   const res = await editFields(issueKey, { timetracking: { originalEstimate: `${value}h` } })
   if (res.ok) return { ok: true, note: `Original estimate set to ${value}h` }
   throw new FixError(lastError || (await jiraErrorText(res)))
+}
+
+/** Current values of the story points fields plus the original time estimate, read as the user. */
+async function currentEstimates(issueKey: string, fields: string[]): Promise<Record<string, unknown>> {
+  const list = [...fields, 'timeoriginalestimate'].join(',')
+  const res = await asUser().requestJira(route`/rest/api/3/issue/${issueKey}?fields=${list}`, { headers: { Accept: 'application/json' } })
+  if (!res.ok) throw new FixError(await jiraErrorText(res))
+  const issue = (await res.json()) as { fields?: Record<string, unknown> }
+  return issue.fields ?? {}
 }
 
 export async function applyFix(issueKey: string, action: FixAction): Promise<FixResult> {
