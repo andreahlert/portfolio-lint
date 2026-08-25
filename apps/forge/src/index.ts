@@ -1,5 +1,19 @@
 import Resolver from '@forge/resolver'
-import { ALL_RULES, getRule, type LintConfigInput, type ProjectForecast } from '@portfolio-lint/core'
+import {
+  ALL_RULES,
+  CONFIG_FIELDS,
+  ConfigError,
+  DEFAULT_CONFIG,
+  FORECAST_FIELDS,
+  getRule,
+  validateConfig,
+  validateProjectOverride,
+  type LintConfigInput,
+  type ProjectForecast,
+} from '@portfolio-lint/core'
+import { applyFix, FixError, fixOptions, type FixAction, type FixOptionKind } from './fixes'
+import { listProjectKeys } from './jiraClient'
+import { isJiraAdmin, isProjectAdmin } from './permissions'
 import { loadConfig, loadHistory, loadLatest, loadProjectViolations, projectFromReport, runScan, saveConfig, type StoredReport } from './scan'
 
 const resolver = new Resolver()
@@ -28,7 +42,7 @@ resolver.define('getProjectReport', async ({ payload }) => {
   return { project, scannedAt: report.scannedAt, violations, violationCount, forecast, historyWeeks: report.forecast?.historyWeeks }
 })
 
-resolver.define('listRules', async () =>
+const ruleMeta = () =>
   ALL_RULES.map((r) => ({
     id: r.id,
     dimension: r.dimension,
@@ -37,15 +51,101 @@ resolver.define('listRules', async () =>
     description: r.description,
     forecastImpact: r.forecastImpact,
     remediation: r.remediation,
-  })),
-)
+    settings: CONFIG_FIELDS.filter((f) => f.rules.includes(r.id)).map((f) => f.key),
+  }))
 
-resolver.define('getConfig', async () => loadConfig())
+resolver.define('listRules', async () => ruleMeta())
 
-resolver.define('saveConfig', async ({ payload }) => {
-  const config = (payload?.config ?? {}) as LintConfigInput
-  await saveConfig(config)
-  return config
+/** Everything the in-app Docs tab needs: rule metadata, settings metadata and the stored config. */
+resolver.define('getDocs', async () => ({
+  rules: ruleMeta(),
+  fields: CONFIG_FIELDS,
+  forecastFields: FORECAST_FIELDS,
+  defaults: DEFAULT_CONFIG,
+  config: await loadConfig(),
+}))
+
+async function knownProjects(): Promise<Array<{ key: string; name: string }>> {
+  const report = await loadLatest()
+  if (report) return report.projects.map((p) => ({ key: p.key, name: p.name }))
+  const keys = await listProjectKeys()
+  return keys.map((key) => ({ key, name: key }))
+}
+
+resolver.define('getSettings', async ({ payload }) => {
+  const projectKey = typeof payload?.projectKey === 'string' && payload.projectKey ? (payload.projectKey as string) : undefined
+  const [config, canEdit, projects] = await Promise.all([
+    loadConfig(),
+    projectKey ? isProjectAdmin(projectKey) : isJiraAdmin(),
+    knownProjects(),
+  ])
+  return {
+    config,
+    defaults: DEFAULT_CONFIG,
+    fields: CONFIG_FIELDS,
+    forecastFields: FORECAST_FIELDS,
+    rules: ruleMeta().map((r) => ({ id: r.id, dimension: r.dimension, weight: r.weight, description: r.description })),
+    canEdit,
+    projects,
+  }
+})
+
+const userMessage = (e: unknown): string => (e instanceof ConfigError || e instanceof FixError ? e.message : String(e))
+
+/** Portfolio-wide settings. Jira admins only; validated with the same rules as the CLI config file. */
+resolver.define('saveSettings', async ({ payload }) => {
+  if (!(await isJiraAdmin())) return { ok: false, error: 'Only Jira administrators can change portfolio settings.' }
+  try {
+    const current = await loadConfig()
+    const next = validateConfig(payload?.config ?? {}, 'settings')
+    // The global form never edits per-project overrides; keep whatever project admins saved.
+    if (current.projects) next.projects = current.projects
+    await saveConfig(next)
+    return { ok: true, config: next }
+  } catch (e) {
+    return { ok: false, error: userMessage(e) }
+  }
+})
+
+/** One project's overrides. Project admins (or Jira admins) only. An empty override removes the entry. */
+resolver.define('saveProjectSettings', async ({ payload }) => {
+  const projectKey = String(payload?.projectKey ?? '')
+  if (!projectKey) return { ok: false, error: 'Missing project key.' }
+  if (!(await isProjectAdmin(projectKey))) return { ok: false, error: `Only administrators of ${projectKey} can change its settings.` }
+  try {
+    const override = validateProjectOverride(payload?.override ?? {}, `settings for ${projectKey}`)
+    const current = await loadConfig()
+    const projects = { ...(current.projects ?? {}) }
+    if (Object.keys(override).length === 0) delete projects[projectKey]
+    else projects[projectKey] = override
+    const next: LintConfigInput = { ...current }
+    if (Object.keys(projects).length === 0) delete next.projects
+    else next.projects = projects
+    await saveConfig(next)
+    return { ok: true, config: next }
+  } catch (e) {
+    return { ok: false, error: userMessage(e) }
+  }
+})
+
+/** Options for the inline fix dialog: open epics, available transitions, existing links. Read as the user. */
+resolver.define('getFixOptions', async ({ payload }) => {
+  try {
+    const kinds = (Array.isArray(payload?.kinds) ? payload.kinds : []) as FixOptionKind[]
+    return { ok: true, options: await fixOptions(String(payload?.issueKey ?? ''), String(payload?.projectKey ?? ''), kinds) }
+  } catch (e) {
+    return { ok: false, error: userMessage(e) }
+  }
+})
+
+/** Applies one fix to one issue, as the current user, so Jira permissions and history stay honest. */
+resolver.define('fixIssue', async ({ payload }) => {
+  try {
+    const result = await applyFix(String(payload?.issueKey ?? ''), (payload?.action ?? {}) as FixAction)
+    return { ok: true, note: result.note }
+  } catch (e) {
+    return { ok: false, error: userMessage(e) }
+  }
 })
 
 export const handler = resolver.getDefinitions()

@@ -39,7 +39,9 @@ modules:
         fix first). When asked "when will X finish", quote the p85 as the date
         to commit to, the p50 as the likely date, the confidence level and its
         reasons, and how many weeks of uncertainty come from unestimated items.
-        You do not change any Jira data; you only read the latest report.
+        You do not change any Jira data yourself; you only read the latest
+        report. Users can fix findings inline from the Findings tab of the
+        Portfolio Readiness page.
       conversationStarters:
         - How ready is our portfolio for AI forecasting?
         - When will each project finish, and how sure are we?
@@ -100,4 +102,6 @@ app:
 permissions:
   scopes:
     - read:jira-work
+    - write:jira-work
+    - read:jira-user
     - storage:app

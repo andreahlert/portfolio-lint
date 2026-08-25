@@ -1,5 +1,6 @@
 export * from './model.js'
 export * from './config.js'
+export * from './config-schema.js'
 export * from './scorer.js'
 export * from './report.js'
 export * from './forecast.js'

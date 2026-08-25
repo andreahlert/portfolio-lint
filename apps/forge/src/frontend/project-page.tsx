@@ -7,6 +7,7 @@ import ForgeReconciler, {
   Inline,
   LoadingButton,
   Lozenge,
+  ModalTransition,
   SectionMessage,
   Spinner,
   Stack,
@@ -20,6 +21,7 @@ import ForgeReconciler, {
 import { invoke } from '@forge/bridge'
 import {
   DimensionBars,
+  DocsNavContext,
   fmt,
   keysForRule,
   openIssues,
@@ -33,7 +35,6 @@ import {
   ScoreCards,
   TabBody,
   toneOf,
-  ViolationsTable,
   type ForecastSet,
   type RemediationRow,
   type RuleMap,
@@ -43,6 +44,10 @@ import {
   type ViolationRow,
 } from './shared'
 import { ProjectForecastPanel, type ProjectForecastRow } from './forecast'
+import { ViolationsTable } from './findings'
+import { FixHint } from './fix'
+import { DocsPanel, RuleDocModal } from './docs'
+import { SettingsPanel } from './settings'
 
 interface RuleScore {
   id: string
@@ -226,52 +231,89 @@ function App() {
         <Stack space="space.300">
           <ScoreCards score={p.score} grade={p.grade} forecasts={p.forecasts} subtitle={`${p.itemCount} items in ${p.key}`} title="Project score" />
           <DimensionBars dimensions={p.dimensions} />
-          <Panel>
-            <Tabs id="project-tabs">
-              <TabList>
-                <Tab>Fix first</Tab>
-                <Tab>Delivery forecast</Tab>
-                <Tab>Rules</Tab>
-                <Tab>{`Findings (${violationCount})`}</Tab>
-              </TabList>
-              <TabPanel>
-                <TabBody>
-                  {p.remediation ? (
-                    <RemediationList rows={p.remediation} violations={violations} rules={rules} />
-                  ) : (
-                    <Text color="color.text.subtle">Scan again to get a prioritized fix list for this project.</Text>
-                  )}
-                </TabBody>
-              </TabPanel>
-              <TabPanel>
-                <TabBody>
-                  {data?.forecast ? (
-                    <ProjectForecastPanel forecast={data.forecast} historyWeeks={data.historyWeeks ?? 12} rules={rules} />
-                  ) : (
-                    <Text color="color.text.subtle">Scan again to get a delivery forecast for this project.</Text>
-                  )}
-                </TabBody>
-              </TabPanel>
-              <TabPanel>
-                <TabBody>
-                  <RulesTable rules={p.rules} violations={violations} meta={rules} />
-                </TabBody>
-              </TabPanel>
-              <TabPanel>
-                <TabBody>
-                  <ViolationsTable rows={violations} rules={rules} total={violationCount} />
-                </TabBody>
-              </TabPanel>
-            </Tabs>
-          </Panel>
         </Stack>
       )}
+
+      <Panel>
+        <Tabs id="project-tabs" defaultSelected={0}>
+            <TabList>
+              <Tab>Fix first</Tab>
+              <Tab>Delivery forecast</Tab>
+              <Tab>Rules</Tab>
+              <Tab>{p ? `Findings (${violationCount})` : 'Findings'}</Tab>
+              <Tab>Docs</Tab>
+              <Tab>Settings</Tab>
+            </TabList>
+            <TabPanel>
+              <TabBody>
+                {p?.remediation ? (
+                  <RemediationList rows={p.remediation} violations={violations} rules={rules} />
+                ) : p ? (
+                  <Text color="color.text.subtle">Scan again to get a prioritized fix list for this project.</Text>
+                ) : (
+                  <NoReport />
+                )}
+              </TabBody>
+            </TabPanel>
+            <TabPanel>
+              <TabBody>
+                {data?.forecast ? (
+                  <ProjectForecastPanel forecast={data.forecast} historyWeeks={data.historyWeeks ?? 12} rules={rules} />
+                ) : p ? (
+                  <Text color="color.text.subtle">Scan again to get a delivery forecast for this project.</Text>
+                ) : (
+                  <NoReport />
+                )}
+              </TabBody>
+            </TabPanel>
+            <TabPanel>
+              <TabBody>{p ? <RulesTable rules={p.rules} violations={violations} meta={rules} /> : <NoReport />}</TabBody>
+            </TabPanel>
+            <TabPanel>
+              <TabBody>
+                {p ? (
+                  <Stack space="space.150">
+                    <FixHint />
+                    <ViolationsTable rows={violations} rules={rules} total={violationCount} showProject={false} />
+                  </Stack>
+                ) : (
+                  <NoReport />
+                )}
+              </TabBody>
+            </TabPanel>
+            <TabPanel>
+              <TabBody>
+                <DocsPanel />
+              </TabBody>
+            </TabPanel>
+            <TabPanel>
+              <TabBody>
+                <SettingsPanel projectKey={projectKey} onRescan={scan} />
+              </TabBody>
+            </TabPanel>
+        </Tabs>
+      </Panel>
     </Stack>
+  )
+}
+
+function NoReport() {
+  return <Text color="color.text.subtle">This project is not in a report yet. Run a scan first.</Text>
+}
+
+/** See DocsHost in global-page.tsx: the Provider must stay above every host element. */
+function DocsHost() {
+  const [docsRule, setDocsRule] = useState<string | null>(null)
+  return (
+    <DocsNavContext.Provider value={setDocsRule}>
+      <App />
+      <ModalTransition>{docsRule ? <RuleDocModal ruleId={docsRule} onClose={() => setDocsRule(null)} /> : null}</ModalTransition>
+    </DocsNavContext.Provider>
   )
 }
 
 ForgeReconciler.render(
   <React.StrictMode>
-    <App />
+    <DocsHost />
   </React.StrictMode>,
 )

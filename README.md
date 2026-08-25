@@ -159,6 +159,9 @@ Full detail in [docs/framework.md](docs/framework.md).
 `apps/forge` is a native Jira Cloud app: portfolio and project pages, a daily scheduled scan, and a
 Rovo agent ("Portfolio Readiness Advisor") that answers "what should we fix first" and "when will this finish"
 from the latest report. Both pages have a Delivery forecast tab (dates, commitment verdict, critical path, fix-first list).
+Rule documentation lives in a Docs tab inside the app, a Settings tab lets Jira admins tune thresholds and turn
+rules on or off (project admins can override them per project), and every fixable finding has a Fix button that
+writes the correction to Jira as the current user (estimate, assignee, due date, parent, transition).
 Data never leaves Atlassian. See [apps/forge/README.md](apps/forge/README.md).
 
 ![Portfolio Readiness page in Jira: score 81.7 grade B, forecast reliability per project, remediation list](docs/img/forge-global-page.jpg)
@@ -185,7 +188,6 @@ npm run typecheck -w portfolio-lint-forge
 
 - Connectors: Azure DevOps, Asana, Linear.
 - Capacity supply rules (availability, leave) once a people source exists.
-- Settings page in the Forge app (per-project thresholds already work via config).
 - Assignee view: who is on the critical path and overloaded at the same time.
 - Readiness badge for READMEs and portfolio dashboards.
 

@@ -7,6 +7,7 @@ import ForgeReconciler, {
   LineChart,
   LoadingButton,
   Lozenge,
+  ModalTransition,
   SectionMessage,
   Spinner,
   Stack,
@@ -21,6 +22,7 @@ import { invoke } from '@forge/bridge'
 import {
   absoluteTime,
   DimensionBars,
+  DocsNavContext,
   ForecastLozenges,
   fmt,
   gradeAppearance,
@@ -32,7 +34,6 @@ import {
   ScoreBar,
   ScoreCards,
   TabBody,
-  ViolationsTable,
   type ForecastSet,
   type RemediationRow,
   type RuleMap,
@@ -42,6 +43,11 @@ import {
   type ViolationRow,
 } from './shared'
 import { DeliveryForecastTable, ProgrammeBanner, type ForecastReportRow } from './forecast'
+import { ViolationsTable } from './findings'
+import { FixHint } from './fix'
+import { DocsPanel, RuleDocModal } from './docs'
+import { SettingsPanel } from './settings'
+
 
 interface ProjectRow {
   key: string
@@ -164,7 +170,6 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [delta, setDelta] = useState<ScanDelta | null>(null)
   const [rules, setRules] = useState<RuleMap | undefined>(undefined)
-
   useEffect(() => {
     invoke<ReportPayload>('getReport')
       .then(setData)
@@ -242,60 +247,97 @@ function App() {
             subtitle={`${r.projects.reduce((n, p) => n + p.itemCount, 0)} items across ${r.projects.length} ${r.projects.length === 1 ? 'project' : 'projects'}`}
           />
           <DimensionBars dimensions={r.dimensions} />
-          <Panel>
-            <Tabs id="portfolio-tabs">
-              <TabList>
-                <Tab>Fix first</Tab>
-                <Tab>Delivery forecast</Tab>
-                <Tab>Projects</Tab>
-                <Tab>{`All findings (${r.violationCount})`}</Tab>
-                <Tab>History</Tab>
-              </TabList>
-              <TabPanel>
-                <TabBody>
-                  <RemediationList rows={r.remediation} violations={r.violations} rules={rules} />
-                </TabBody>
-              </TabPanel>
-              <TabPanel>
-                <TabBody>
-                  {r.forecast ? (
-                    <Stack space="space.200">
-                      <ProgrammeBanner forecast={r.forecast} />
-                      <DeliveryForecastTable projects={r.forecast.projects} />
-                      <Text size="small" color="color.text.subtle">
-                        p50 and p85 are the dates by which 50% and 85% of Monte Carlo runs finish the open work, using each project's own weekly throughput. Commitment compares p85 with the latest due date on an open epic. Open a project for its critical path and the items to fix first.
-                      </Text>
-                    </Stack>
-                  ) : (
-                    <Text color="color.text.subtle">Scan again to get a delivery forecast. Reports from older versions of the app do not include one.</Text>
-                  )}
-                </TabBody>
-              </TabPanel>
-              <TabPanel>
-                <TabBody>
-                  <ProjectsTable projects={r.projects} />
-                </TabBody>
-              </TabPanel>
-              <TabPanel>
-                <TabBody>
-                  <ViolationsTable rows={r.violations} rules={rules} total={r.violationCount} />
-                </TabBody>
-              </TabPanel>
-              <TabPanel>
-                <TabBody>
-                  <History history={data?.history ?? []} locale={locale} />
-                </TabBody>
-              </TabPanel>
-            </Tabs>
-          </Panel>
         </Stack>
       )}
+
+      <Panel>
+        <Tabs id="portfolio-tabs" defaultSelected={0}>
+            <TabList>
+              <Tab>Fix first</Tab>
+              <Tab>Delivery forecast</Tab>
+              <Tab>Projects</Tab>
+              <Tab>{r ? `All findings (${r.violationCount})` : 'All findings'}</Tab>
+              <Tab>History</Tab>
+              <Tab>Docs</Tab>
+              <Tab>Settings</Tab>
+            </TabList>
+            <TabPanel>
+              <TabBody>{r ? <RemediationList rows={r.remediation} violations={r.violations} rules={rules} /> : <NoReport />}</TabBody>
+            </TabPanel>
+            <TabPanel>
+              <TabBody>
+                {r?.forecast ? (
+                  <Stack space="space.200">
+                    <ProgrammeBanner forecast={r.forecast} />
+                    <DeliveryForecastTable projects={r.forecast.projects} />
+                    <Text size="small" color="color.text.subtle">
+                      p50 and p85 are the dates by which 50% and 85% of Monte Carlo runs finish the open work, using each project's own weekly throughput. Commitment compares p85 with the latest due date on an open epic. Open a project for its critical path and the items to fix first.
+                    </Text>
+                  </Stack>
+                ) : r ? (
+                  <Text color="color.text.subtle">Scan again to get a delivery forecast. Reports from older versions of the app do not include one.</Text>
+                ) : (
+                  <NoReport />
+                )}
+              </TabBody>
+            </TabPanel>
+            <TabPanel>
+              <TabBody>{r ? <ProjectsTable projects={r.projects} /> : <NoReport />}</TabBody>
+            </TabPanel>
+            <TabPanel>
+              <TabBody>
+                {r ? (
+                  <Stack space="space.150">
+                    <FixHint />
+                    <ViolationsTable rows={r.violations} rules={rules} total={r.violationCount} />
+                  </Stack>
+                ) : (
+                  <NoReport />
+                )}
+              </TabBody>
+            </TabPanel>
+            <TabPanel>
+              <TabBody>
+                <History history={data?.history ?? []} locale={locale} />
+              </TabBody>
+            </TabPanel>
+            <TabPanel>
+              <TabBody>
+                <DocsPanel />
+              </TabBody>
+            </TabPanel>
+            <TabPanel>
+              <TabBody>
+                <SettingsPanel onRescan={scan} />
+              </TabBody>
+            </TabPanel>
+        </Tabs>
+      </Panel>
     </Stack>
+  )
+}
+
+function NoReport() {
+  return <Text color="color.text.subtle">No report yet. Run a scan first.</Text>
+}
+
+/**
+ * Owns the rule-docs modal and provides `showDocs` to the tree. Must sit above every host element: the UI Kit
+ * reconciler copies `children` into host props on update, and a Context.Provider element in there is a circular
+ * structure that freezes the sandbox when the doc is serialized.
+ */
+function DocsHost() {
+  const [docsRule, setDocsRule] = useState<string | null>(null)
+  return (
+    <DocsNavContext.Provider value={setDocsRule}>
+      <App />
+      <ModalTransition>{docsRule ? <RuleDocModal ruleId={docsRule} onClose={() => setDocsRule(null)} /> : null}</ModalTransition>
+    </DocsNavContext.Provider>
   )
 }
 
 ForgeReconciler.render(
   <React.StrictMode>
-    <App />
+    <DocsHost />
   </React.StrictMode>,
 )

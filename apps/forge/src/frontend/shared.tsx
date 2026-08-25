@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import {
   Badge,
   Box,
@@ -13,7 +13,6 @@ import {
   Pressable,
   ProgressBar,
   SectionMessage,
-  Select,
   SectionMessageAction,
   Stack,
   Text,
@@ -59,6 +58,8 @@ export interface RuleMeta {
   description: string
   forecastImpact: string
   remediation: string
+  /** Config keys the rule reads. */
+  settings?: string[]
 }
 
 export type RuleMap = Record<string, RuleMeta>
@@ -182,7 +183,18 @@ export function RuleCode({ ruleId, rules }: { ruleId: string; rules?: RuleMap })
   )
 }
 
+/** Provided by pages that have an in-app Docs tab, so rule "Docs" links open it instead of GitHub. */
+export const DocsNavContext = React.createContext<((ruleId: string) => void) | null>(null)
+
 export function RuleDocLink({ ruleId }: { ruleId: string }) {
+  const showDocs = React.useContext(DocsNavContext)
+  if (showDocs) {
+    return (
+      <Button appearance="subtle" spacing="compact" iconBefore="book" onClick={() => showDocs(ruleId)}>
+        Docs
+      </Button>
+    )
+  }
   return (
     <Link href={`${RULES_DOC_URL}#${ruleId}`} openNewTab>
       Docs
@@ -423,108 +435,6 @@ export function RemediationList({ rows, violations, rules }: { rows: Remediation
           </Box>
         )
       })}
-    </Stack>
-  )
-}
-
-interface Option {
-  label: string
-  value: string
-}
-
-const filterStyle = xcss({ minWidth: '200px' })
-
-function FilterSelect({ placeholder, options, value, onChange }: { placeholder: string; options: Option[]; value: string | null; onChange: (v: string | null) => void }) {
-  const selected = options.find((o) => o.value === value) ?? null
-  return (
-    <Box xcss={filterStyle}>
-      <Select
-        placeholder={placeholder}
-        options={options}
-        value={selected}
-        isClearable
-        spacing="compact"
-        onChange={(opt: unknown) => onChange((opt as Option | null)?.value ?? null)}
-      />
-    </Box>
-  )
-}
-
-const capitalizeWord = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
-
-export function ViolationsTable({ rows, rules, total, max = 100 }: { rows: ViolationRow[]; rules?: RuleMap; total?: number; max?: number }) {
-  const [project, setProject] = useState<string | null>(null)
-  const [dimension, setDimension] = useState<string | null>(null)
-  const [rule, setRule] = useState<string | null>(null)
-
-  if (rows.length === 0) return <Text color="color.text.subtle">No findings.</Text>
-
-  const projects = [...new Set(rows.map((v) => v.projectKey))].sort()
-  const ruleIds = [...new Set(rows.map((v) => v.ruleId))].sort()
-  const dimensions = rules ? [...new Set(ruleIds.map((id) => rules[id]?.dimension).filter((d): d is string => Boolean(d)))].sort() : []
-
-  const filtered = rows.filter(
-    (v) =>
-      (project === null || v.projectKey === project) &&
-      (rule === null || v.ruleId === rule) &&
-      (dimension === null || rules?.[v.ruleId]?.dimension === dimension),
-  )
-  const shown = filtered.slice(0, max)
-  const active = project !== null || dimension !== null || rule !== null
-  const clear = () => {
-    setProject(null)
-    setDimension(null)
-    setRule(null)
-  }
-
-  return (
-    <Stack space="space.150">
-      <Inline space="space.100" alignBlock="center" shouldWrap>
-        {projects.length > 1 ? (
-          <FilterSelect placeholder="All projects" options={projects.map((p) => ({ label: p, value: p }))} value={project} onChange={setProject} />
-        ) : null}
-        {dimensions.length > 1 ? (
-          <FilterSelect placeholder="All dimensions" options={dimensions.map((d) => ({ label: capitalizeWord(d), value: d }))} value={dimension} onChange={setDimension} />
-        ) : null}
-        <FilterSelect placeholder="All rules" options={ruleIds.map((r) => ({ label: r, value: r }))} value={rule} onChange={setRule} />
-        {active ? (
-          <Button appearance="subtle" onClick={clear}>
-            Clear
-          </Button>
-        ) : null}
-        <Text color="color.text.subtle">
-          {filtered.length > max ? `Showing first ${max} of ${filtered.length} findings.` : active ? `${filtered.length} of ${rows.length} findings.` : `${rows.length} findings.`}
-        </Text>
-      </Inline>
-      {total !== undefined && total > rows.length ? (
-        <Text size="small" color="color.text.subtle">
-          {`${total} findings in total. Only ${rows.length} are stored here, spread across projects. Open a project page for its complete list, or use the CLI for a full export.`}
-        </Text>
-      ) : null}
-      {filtered.length === 0 ? (
-        <Text color="color.text.subtle">No findings match these filters.</Text>
-      ) : (
-        <DynamicTable
-          rowsPerPage={20}
-          head={{
-            cells: [
-              { key: 'project', content: 'Project', isSortable: true },
-              { key: 'item', content: 'Item', isSortable: true },
-              { key: 'rule', content: 'Rule', isSortable: true },
-              { key: 'message', content: 'What is wrong' },
-            ],
-          }}
-          rows={shown.map((v, i) => ({
-            key: `${v.projectKey}-${v.itemKey ?? 'project'}-${v.ruleId}-${i}`,
-            cells: [
-              { key: 'project', content: v.projectKey },
-              { key: 'item', content: v.itemKey ? <IssueLink issueKey={v.itemKey} /> : <Text color="color.text.subtle">(project)</Text> },
-              { key: 'rule', content: <RuleCode ruleId={v.ruleId} rules={rules} /> },
-              { key: 'message', content: v.message },
-            ],
-          }))}
-        />
-      )}
     </Stack>
   )
 }

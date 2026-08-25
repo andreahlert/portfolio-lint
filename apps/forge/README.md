@@ -43,12 +43,17 @@ Open Jira, Apps menu, Portfolio Readiness, click Scan now. The daily trigger run
 ## Configuration
 
 Thresholds live in Forge storage under key `config` (same shape as `.portfoliolintrc.json`).
-Use `npx forge storage` or the `saveConfig` resolver from a future settings page. Defaults:
-stale in progress 14 days, stale open 90 days, max WIP 3, outlier factor 5.
+Jira admins edit them in the Settings tab of the portfolio page; project admins set per-project overrides
+in the Settings tab of the project page (stored under `config.projects.<KEY>`). Defaults:
+stale in progress 14 days, stale open 90 days, baseline WIP 3, outlier factor 5.
 
 ## Development notes
 
-- `src/index.ts`: resolver (`getReport`, `scanNow`, `getProjectReport`, `listRules`, `getConfig`, `saveConfig`), scheduled handler, Rovo actions.
+- `src/index.ts`: resolver (`getReport`, `scanNow`, `getProjectReport`, `listRules`, `getDocs`, `getSettings`, `saveSettings`, `saveProjectSettings`, `getFixOptions`, `fixIssue`), scheduled handler, Rovo actions.
+- `src/fixes.ts`: inline fixes, written with `api.asUser()` so Jira permissions and history stay with the person clicking. `src/permissions.ts`: Jira admin / project admin checks that gate the Settings tabs.
+- `src/frontend/`: `docs.tsx` (in-app rule reference and per-rule modal), `settings.tsx` (global settings and per-project overrides, validated by `@portfolio-lint/core` config schema), `findings.tsx` and `fix.tsx` (compact findings table with Fix buttons).
+- UI Kit gotcha: the `@forge/react` reconciler copies `children` into host-element props on every update and serializes the whole doc to the host. A `React.Context.Provider` element inside those props is circular and silently freezes the sandbox (every later click is ignored, no error anywhere). Keep any Provider above the first host element (see `DocsHost` in the pages).
+- UI Kit gotcha: `route` from `@forge/api` URL-encodes interpolated values, so build JQL and field lists with plain strings.
 - `src/jiraClient.ts`: `api.asApp().requestJira`, `POST /rest/api/3/search/jql` with `nextPageToken` pagination, story points field detection.
 - `src/scan.ts`: runs `lintPortfolio` from `@portfolio-lint/core`, stores the latest report (violations capped at 500) and a 30-point score history.
 - UI is Forge UI Kit (`@forge/react`), rendered natively, no custom iframe.
