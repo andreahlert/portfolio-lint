@@ -7,7 +7,7 @@ reads issues with `read:jira-work`, stores reports in Forge storage, and ships a
 
 | Module | What it does |
 |---|---|
-| `jira:globalPage` Portfolio Readiness | Portfolio score, grade, forecast labels, per-project table, remediation, violations, trend. "Scan now" button. |
+| `jira:globalPage` Portfolio Readiness | Portfolio score, grade, forecast labels, delivery forecast per project (p50/p85, commitment verdict, confidence), per-project table, remediation, violations, trend. "Scan now" button. |
 | `jira:projectPage` AI Readiness | Same for one project, plus per-rule table. |
 | `scheduledTrigger` daily | Rescans every project the app can read (up to 20 projects, 2000 issues each). |
 | `rovo:agent` Portfolio Readiness Advisor | Answers "how ready are we", "what to fix first", "explain rule X" via two actions: `getPortfolioScore`, `explainRule`. |

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { CsvFormatError, lintPortfolio, parsePortfolioCsv, type LintConfig, type Portfolio, type Report } from '@portfolio-lint/core'
+import { CsvFormatError, lintPortfolio, parsePortfolioCsv, type LintConfigInput, type Portfolio, type Report } from '@portfolio-lint/core'
 import { fetchJiraPortfolio, JiraHttpError } from '../connectors/jira.js'
 import { ConfigError, loadConfigFile } from '../config.js'
 import { renderJson } from '../render/json.js'
@@ -22,6 +22,8 @@ export interface ScanOptions {
   failUnder?: number
   now?: string
   name?: string
+  /** false disables the Monte Carlo and critical path pass (commander sets this from --no-forecast). */
+  forecast?: boolean
 }
 
 export interface ScanIO {
@@ -54,7 +56,8 @@ export async function runScan(opts: ScanOptions, io: ScanIO): Promise<ScanOutcom
     const env = io.env ?? process.env
     const format = parseFormat(opts.format)
     const fileConfig = loadConfigFile(opts.config, cwd)
-    const config: Partial<LintConfig> = { ...fileConfig }
+    const config: LintConfigInput = { ...fileConfig }
+    if (opts.forecast === false) config.forecast = { ...(config.forecast ?? {}), enabled: false }
     if (opts.now !== undefined) {
       if (Number.isNaN(Date.parse(opts.now))) throw new UsageError(`--now must be an ISO datetime, got "${opts.now}"`)
       config.now = opts.now

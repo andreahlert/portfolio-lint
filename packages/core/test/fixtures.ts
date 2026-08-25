@@ -1,5 +1,5 @@
 import type { Person, Project, WorkItem } from '../src/model.js'
-import { resolveConfig, type LintConfig } from '../src/config.js'
+import { resolveConfig, type LintConfigInput } from '../src/config.js'
 import type { RuleContext } from '../src/rules/rule.js'
 
 export const NOW = new Date('2026-08-24T00:00:00Z')
@@ -36,8 +36,8 @@ export function makeProject(items: WorkItem[], people: Person[] = []): Project {
   }
 }
 
-export function ctx(config: Partial<LintConfig> = {}): RuleContext {
-  return { config: resolveConfig(config), now: NOW }
+export function ctx(config: LintConfigInput = {}, portfolioItems: WorkItem[] = []): RuleContext {
+  return { config: resolveConfig(config), now: NOW, portfolioItems: new Map(portfolioItems.map((i) => [i.id, i])) }
 }
 
 /** ISO datetime N days before NOW. */

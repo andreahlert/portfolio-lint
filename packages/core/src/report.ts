@@ -8,8 +8,10 @@ import {
   type Project,
   type RuleResult,
   type Violation,
+  type WorkItem,
 } from './model.js'
-import { resolveConfig, type LintConfig } from './config.js'
+import { configForProject, resolveConfig, type LintConfig, type LintConfigInput } from './config.js'
+import { forecastPortfolio, type ForecastReport } from './forecast.js'
 import { ALL_RULES } from './rules/index.js'
 import type { Rule, RuleContext } from './rules/rule.js'
 import {
@@ -70,23 +72,34 @@ export interface Report {
   remediation: RemediationItem[]
   config: LintConfig
   rulesEvaluated: string[]
+  /** Monte Carlo + critical path forecast. Absent when `config.forecast.enabled` is false. */
+  forecast?: ForecastReport
 }
 
 export interface LintOptions {
   rules?: Rule[]
 }
 
-export function lintPortfolio(portfolio: Portfolio, partialConfig: Partial<LintConfig> = {}, options: LintOptions = {}): Report {
+export function lintPortfolio(portfolio: Portfolio, partialConfig: LintConfigInput = {}, options: LintOptions = {}): Report {
   const config = resolveConfig(partialConfig)
   const now = config.now ? new Date(config.now) : new Date()
-  const ctx: RuleContext = { config, now }
   const disabled = new Set(config.disabledRules)
   const rules = (options.rules ?? ALL_RULES).filter((r) => !disabled.has(r.id))
 
-  const perProject: Array<{ project: Project; results: RuleResult[] }> = portfolio.projects.map((project) => ({
-    project,
-    results: rules.map((r) => r.evaluate(project, ctx)),
-  }))
+  // Every item in the scan, so rules can resolve links that cross project boundaries.
+  const portfolioItems = new Map<string, WorkItem>()
+  for (const project of portfolio.projects) for (const item of project.items) portfolioItems.set(item.id, item)
+
+  const perProject: Array<{ project: Project; results: RuleResult[] }> = portfolio.projects.map((project) => {
+    const projectConfig = configForProject(config, project.key)
+    const disabledHere = new Set(projectConfig.disabledRules)
+    const ctx: RuleContext = { config: projectConfig, now, portfolioItems }
+    return {
+      project,
+      // A rule disabled for this project only reports applicable 0, so it is skipped in scoring and never feeds a forecast.
+      results: rules.map((r) => (disabledHere.has(r.id) ? { ruleId: r.id, applicable: 0, violations: [] } : r.evaluate(project, ctx))),
+    }
+  })
 
   const projects: ProjectReport[] = perProject.map((pp) => ({
     ...buildProjectReport(pp.project, pp.results, rules),
@@ -109,7 +122,7 @@ export function lintPortfolio(portfolio: Portfolio, partialConfig: Partial<LintC
     FORECAST_TYPES.map((f) => [f, toForecast(forecastScores[f], limitingRule(rules, f, projects))]),
   ) as ForecastScores
 
-  return {
+  const report: Report = {
     name: portfolio.name,
     scannedAt: portfolio.scannedAt,
     score,
@@ -122,6 +135,8 @@ export function lintPortfolio(portfolio: Portfolio, partialConfig: Partial<LintC
     config,
     rulesEvaluated: rules.map((r) => r.id),
   }
+  if (config.forecast.enabled) report.forecast = forecastPortfolio(portfolio, config, now)
+  return report
 }
 
 /** Rule feeding forecast `f` with the lowest mean score across projects. */

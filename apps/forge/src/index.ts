@@ -1,5 +1,5 @@
 import Resolver from '@forge/resolver'
-import { ALL_RULES, getRule, type LintConfig } from '@portfolio-lint/core'
+import { ALL_RULES, getRule, type LintConfigInput, type ProjectForecast } from '@portfolio-lint/core'
 import { loadConfig, loadHistory, loadLatest, loadProjectViolations, projectFromReport, runScan, saveConfig, type StoredReport } from './scan'
 
 const resolver = new Resolver()
@@ -19,12 +19,13 @@ resolver.define('scanNow', async ({ payload }) => {
 resolver.define('getProjectReport', async ({ payload }) => {
   const projectKey = String(payload?.projectKey ?? '')
   const report = await loadLatest()
-  if (!report) return { project: null, scannedAt: null, violations: [], violationCount: 0 }
+  if (!report) return { project: null, scannedAt: null, violations: [], violationCount: 0, forecast: null }
   const project = projectFromReport(report, projectKey) ?? null
+  const forecast = report.forecast?.projects.find((p) => p.key === projectKey) ?? null
   // Per-project list is complete up to its cap; the report-level list is only a cross-project sample.
   const violations = (await loadProjectViolations(projectKey)) ?? report.violations.filter((v) => v.projectKey === projectKey)
   const violationCount = project ? project.rules.reduce((n, r) => n + r.violations, 0) : 0
-  return { project, scannedAt: report.scannedAt, violations, violationCount }
+  return { project, scannedAt: report.scannedAt, violations, violationCount, forecast, historyWeeks: report.forecast?.historyWeeks }
 })
 
 resolver.define('listRules', async () =>
@@ -42,7 +43,7 @@ resolver.define('listRules', async () =>
 resolver.define('getConfig', async () => loadConfig())
 
 resolver.define('saveConfig', async ({ payload }) => {
-  const config = (payload?.config ?? {}) as Partial<LintConfig>
+  const config = (payload?.config ?? {}) as LintConfigInput
   await saveConfig(config)
   return config
 })
@@ -57,6 +58,28 @@ export async function scheduled(): Promise<void> {
 interface ActionPayload {
   projectKey?: string
   ruleId?: string
+}
+
+function summarizeForecast(p: ProjectForecast) {
+  return {
+    project: p.key,
+    status: p.status,
+    confidence: p.confidence.level,
+    limits: p.confidence.reasons,
+    openItems: p.remaining.openItems,
+    unestimatedItems: p.remaining.unestimatedItems,
+    throughputPerWeek: p.throughput ? `${p.throughput.mean} ${p.throughput.unit}` : null,
+    p50: p.finish?.p50.date ?? null,
+    p85: p.finish?.p85.date ?? null,
+    p95: p.finish?.p95.date ?? null,
+    p85IfAllEstimated: p.finishIfEstimated?.p85.date ?? null,
+    weeksOfUncertaintyFromMissingEstimates: p.scopeUncertaintyWeeks,
+    commitment: p.commitment,
+    criticalPath: p.criticalPath.items.map((i) => i.key),
+    criticalPathCrossesProjects: p.criticalPath.crossProject,
+    dependencyCycles: p.criticalPath.cycles,
+    fixFirst: p.leverage.slice(0, 5).map((i) => ({ key: i.key, problems: i.issues })),
+  }
 }
 
 function summarize(report: StoredReport, projectKey?: string) {
@@ -82,6 +105,14 @@ function summarize(report: StoredReport, projectKey?: string) {
       examples: r.examples,
     })),
     violationCount: report.violationCount,
+    deliveryForecast: report.forecast
+      ? {
+          method: `Monte Carlo on ${report.forecast.historyWeeks} weeks of throughput, ${report.forecast.simulations} runs per project, plus critical path over the dependency graph`,
+          programmeFinishP85: report.forecast.programme.p85?.date ?? null,
+          drivenBy: report.forecast.programme.drivenBy,
+          projects: (project ? report.forecast.projects.filter((p) => p.key === project.key) : report.forecast.projects).map(summarizeForecast),
+        }
+      : null,
   }
 }
 

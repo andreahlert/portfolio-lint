@@ -12,11 +12,12 @@ Weights (1 to 3) drive the dimension score. Forecasts list which forecast types 
 | [missing-due-date](#missing-due-date) | completeness | 2 | schedule | Open epics must have a due date. |
 | [missing-parent](#missing-parent) | traceability | 2 | scope | Non-epic items must roll up to an epic or parent. |
 | [epic-without-children](#epic-without-children) | traceability | 1 | scope | Open epics must have at least one child item. |
-| [broken-dependency](#broken-dependency) | consistency | 2 | schedule | Every dependency must point to an item that exists in the project. |
+| [broken-dependency](#broken-dependency) | consistency | 2 | schedule | Every dependency must point to an item that exists somewhere in the scanned portfolio. |
+| [dependency-cycle](#dependency-cycle) | consistency | 2 | schedule | Dependencies must not form a cycle (A blocks B blocks A). |
 | [stale-in-progress](#stale-in-progress) | freshness | 3 | schedule | Items in progress must have been updated recently (default 14 days). |
 | [stale-open](#stale-open) | freshness | 1 | scope | Backlog items must not sit untouched for too long (default 90 days). |
 | [overdue-open](#overdue-open) | freshness | 2 | schedule | Open items must not have a due date in the past. |
-| [overallocated-assignee](#overallocated-assignee) | consistency | 2 | capacity | No person should have more in-progress items than the WIP limit (default 3). |
+| [overallocated-assignee](#overallocated-assignee) | consistency | 2 | capacity | No person should carry far more in-progress items than their team. The limit is max(baseline 3, 2x team median), capped at 10. |
 | [estimate-outlier](#estimate-outlier) | consistency | 1 | capacity | Estimates should be on the same scale; no item should exceed factor x median (default 5x). Needs at least 5 estimated items. |
 | [status-resolution-mismatch](#status-resolution-mismatch) | consistency | 2 | schedule | Done items must have a resolution date, and only done items may have one. |
 
@@ -70,9 +71,18 @@ Weights (1 to 3) drive the dimension score. Forecasts list which forecast types 
 - Dimension: consistency
 - Weight: 2
 - Forecasts affected: schedule
-- Description: Every dependency must point to an item that exists in the project.
+- Description: Every dependency must point to an item that exists somewhere in the scanned portfolio.
 - Forecast impact: Schedule forecasts walk the dependency graph to compute critical path. A dangling link breaks the walk, so downstream dates are computed without the blocker.
-- Remediation: Repair or remove the dangling links on the listed items. If the blocker lives in another project, include that project in the scan.
+- Remediation: Repair or remove the dangling links on the listed items. Links into projects outside the scan count as dangling: add those projects to the scan or drop the link.
+
+## dependency-cycle
+
+- Dimension: consistency
+- Weight: 2
+- Forecasts affected: schedule
+- Description: Dependencies must not form a cycle (A blocks B blocks A).
+- Forecast impact: A cycle has no valid order, so critical path and start dates cannot be computed for anything downstream of it. Forecasting tools either drop the whole chain or loop.
+- Remediation: Break each listed cycle by removing or reversing one link. Usually one of the links was meant as "relates to", not "blocks".
 
 ## stale-in-progress
 
@@ -106,9 +116,9 @@ Weights (1 to 3) drive the dimension score. Forecasts list which forecast types 
 - Dimension: consistency
 - Weight: 2
 - Forecasts affected: capacity
-- Description: No person should have more in-progress items than the WIP limit (default 3).
+- Description: No person should carry far more in-progress items than their team. The limit is max(baseline 3, 2x team median), capped at 10.
 - Forecast impact: Capacity forecasts assume a person finishes what they start. Someone with many parallel items is multitasking or mis-statused, so per-person throughput is unpredictable.
-- Remediation: Have the listed people finish or park items until they are under the limit. Enforce a WIP limit on the board.
+- Remediation: Have the listed people finish or park items until they are under the limit. Enforce a WIP limit on the board, or raise maxWipPerPerson for teams that legitimately run wide.
 
 ## estimate-outlier
 

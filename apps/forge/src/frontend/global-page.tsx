@@ -41,6 +41,7 @@ import {
   toRuleMap,
   type ViolationRow,
 } from './shared'
+import { DeliveryForecastTable, ProgrammeBanner, type ForecastReportRow } from './forecast'
 
 interface ProjectRow {
   key: string
@@ -62,6 +63,7 @@ interface StoredReport {
   remediation: RemediationRow[]
   violations: ViolationRow[]
   violationCount: number
+  forecast?: ForecastReportRow
 }
 
 interface HistoryPoint {
@@ -244,6 +246,7 @@ function App() {
             <Tabs id="portfolio-tabs">
               <TabList>
                 <Tab>Fix first</Tab>
+                <Tab>Delivery forecast</Tab>
                 <Tab>Projects</Tab>
                 <Tab>{`All findings (${r.violationCount})`}</Tab>
                 <Tab>History</Tab>
@@ -251,6 +254,21 @@ function App() {
               <TabPanel>
                 <TabBody>
                   <RemediationList rows={r.remediation} violations={r.violations} rules={rules} />
+                </TabBody>
+              </TabPanel>
+              <TabPanel>
+                <TabBody>
+                  {r.forecast ? (
+                    <Stack space="space.200">
+                      <ProgrammeBanner forecast={r.forecast} />
+                      <DeliveryForecastTable projects={r.forecast.projects} />
+                      <Text size="small" color="color.text.subtle">
+                        p50 and p85 are the dates by which 50% and 85% of Monte Carlo runs finish the open work, using each project's own weekly throughput. Commitment compares p85 with the latest due date on an open epic. Open a project for its critical path and the items to fix first.
+                      </Text>
+                    </Stack>
+                  ) : (
+                    <Text color="color.text.subtle">Scan again to get a delivery forecast. Reports from older versions of the app do not include one.</Text>
+                  )}
                 </TabBody>
               </TabPanel>
               <TabPanel>

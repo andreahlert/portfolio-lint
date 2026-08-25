@@ -39,7 +39,7 @@ min score among its rules: `reliable` (>= 75), `degraded` (>= 50), `unreliable` 
 
 | Forecast | Depends on rules |
 |---|---|
-| schedule | missing-due-date, stale-in-progress, overdue-open, broken-dependency, status-resolution-mismatch |
+| schedule | missing-due-date, stale-in-progress, overdue-open, broken-dependency, dependency-cycle, status-resolution-mismatch |
 | capacity | missing-estimate, missing-assignee, overallocated-assignee, estimate-outlier |
 | scope | missing-parent, epic-without-children, stale-open, missing-estimate |
 
@@ -79,10 +79,11 @@ interface Project {
 interface Portfolio { name: string; scannedAt: string; projects: Project[] }
 ```
 
-## 5. Rules (12)
+## 5. Rules (13)
 
 Each rule: `id`, `dimension`, `weight` (1..3), `description`, `forecastImpact`,
-`remediation`, `evaluate(project, config) -> { applicable: number; violations: Violation[] }`.
+`remediation`, `evaluate(project, ctx) -> { applicable: number; violations: Violation[] }` where
+`ctx = { config, now, portfolioItems }` and `portfolioItems` is every item in the scan keyed by id.
 Violation: `{ ruleId, projectKey, itemKey?, message }`.
 Rule score = `100 * (1 - violations/applicable)`; rule with `applicable = 0` is skipped
 (not counted) at aggregation.
@@ -94,16 +95,21 @@ Rule score = `100 * (1 - violations/applicable)`; rule with `applicable = 0` is 
 | missing-due-date | Completeness | 2 | epics, not done | no dueDate |
 | missing-parent | Traceability | 2 | non-epic | no parentId |
 | epic-without-children | Traceability | 1 | epics, not done | zero items with parentId = epic |
-| broken-dependency | Consistency | 2 | items with dependsOn | any dependsOn id not in project |
+| broken-dependency | Consistency | 2 | items with dependsOn | any dependsOn id not in the scan (any project) |
+| dependency-cycle | Consistency | 2 | items with dependsOn | item on a cycle of dependsOn links (Tarjan SCC) |
 | stale-in-progress | Freshness | 3 | in_progress | updatedAt older than `staleInProgressDays` (14) |
 | stale-open | Freshness | 1 | todo | updatedAt older than `staleOpenDays` (90) |
 | overdue-open | Freshness | 2 | not done, has dueDate | dueDate < now |
-| overallocated-assignee | Consistency | 2 | people with >= 1 in_progress item | in_progress count > `maxWipPerPerson` (3) |
+| overallocated-assignee | Consistency | 2 | people with >= 1 in_progress item | in_progress count > limit, limit = `maxWipPerPerson` (3) for < `wipAdaptiveMinPeople` (3) people, else `min(wipHardLimit 10, max(maxWipPerPerson, wipOutlierFactor 2 x team median))` |
 | estimate-outlier | Consistency | 1 | non-epic with estimate, when >= 5 estimated | estimate > `outlierFactor` (5) x median |
 | status-resolution-mismatch | Consistency | 2 | all items | done without resolvedAt, or resolvedAt without done |
 
 Config (`.portfoliolintrc.json`, all optional): `staleInProgressDays`, `staleOpenDays`,
-`maxWipPerPerson`, `outlierFactor`, `now` (ISO, for reproducible runs), `disabledRules`.
+`maxWipPerPerson`, `wipOutlierFactor`, `wipHardLimit`, `wipAdaptiveMinPeople`, `outlierFactor`,
+`now` (ISO, for reproducible runs), `disabledRules`, `projects` (per-key overrides of the above;
+project `disabledRules` union with the portfolio list), `forecast` (`enabled`, `historyWeeks`,
+`simulations`, `seed`). `configForProject(config, key)` resolves the per-project view; a rule
+disabled for one project reports `applicable = 0` there.
 
 ## 6. Scoring
 
@@ -114,6 +120,30 @@ Config (`.portfoliolintrc.json`, all optional): `staleInProgressDays`, `staleOpe
 - Report object: `{ portfolio, scannedAt, score, grade, dimensions, forecasts, projects: [{ key, score, grade, dimensions, forecasts, rules: [{ id, applicable, violations, score }] }], violations[], remediation[] }`.
 - Remediation list = rules sorted by `(100 - score) * weight * applicable` desc, each with
   rule remediation text and top 5 example item keys.
+- `report.forecast` (when `config.forecast.enabled`): see section 6a.
+
+## 6a. Delivery forecast (`forecast.ts`)
+
+Pure function `forecastPortfolio(portfolio, config, now) -> ForecastReport`.
+
+- Throughput per project: done non-epic items bucketed by `resolvedAt` week over `historyWeeks`.
+  Unit `points` when >= 50% of them have an estimate (and the project has an estimate pool), else `items`.
+- Open work: non-epic, not done. `knownWork` = sum of estimates (points) or count (items).
+- Simulation (mulberry32 PRNG, seed + project index, `simulations` runs): remaining = knownWork +
+  one sample from the project's estimate pool per unestimated item; subtract a random history
+  week until <= 0; cap 520 weeks. p50/p85/p95 by rank. `finishIfEstimated` pins unestimated
+  items to the median estimate; `scopeUncertaintyWeeks = p85 - p85(pinned)`.
+- Critical path: DAG over all open items in the scan, node weight = estimate or project median
+  (1 in items mode). Longest path by memoized DFS over `dependsOn`; back edges recorded as cycles
+  and skipped. Per project: the node with the largest path weight and its chain (may cross projects,
+  may be a single heavy item).
+- Commitment: latest `dueDate` among open epics vs p85/p50 dates.
+- Confidence: high unless downgraded (activeWeeks < 4 low; unestimated share > 30% low, > 10%
+  medium; items mode with unestimated work medium; unestimated on path medium; cycle low;
+  throughput cv > 1 medium; p95 at cap low). Reasons kept as strings.
+- Leverage: path items with issues, then in-progress items with issues, weighted
+  missing-estimate 3, missing-assignee 2, stale-in-progress 2, overdue-open 1, top 10.
+- Programme: max p85 across projects and the project that drives it.
 
 ## 7. Packages
 
@@ -131,8 +161,9 @@ portfolio-lint/
 
 ### packages/core
 - `model.ts`, `rules/*.ts` (one file per rule), `rules/index.ts` (registry),
-  `scorer.ts`, `report.ts`, `csv.ts` (parse canonical CSV text into Portfolio),
-  `config.ts` (defaults + merge).
+  `scorer.ts`, `report.ts`, `forecast.ts` (Monte Carlo + critical path),
+  `csv.ts` (parse canonical CSV text into Portfolio),
+  `config.ts` (defaults + merge + per-project resolution).
 - Pure functions. No network, no fs.
 
 ### packages/cli

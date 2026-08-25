@@ -1,9 +1,15 @@
-import type { Dimension, ForecastType, Project, RuleResult } from '../model.js'
+import type { Dimension, ForecastType, Project, RuleResult, WorkItem } from '../model.js'
 import type { LintConfig } from '../config.js'
 
 export interface RuleContext {
+  /** Config already resolved for the project being evaluated (per-project overrides applied). */
   config: LintConfig
   now: Date
+  /**
+   * Every item in the scanned portfolio, keyed by id, across all projects.
+   * Lets rules resolve links that cross project boundaries.
+   */
+  portfolioItems: ReadonlyMap<string, WorkItem>
 }
 
 export interface Rule {

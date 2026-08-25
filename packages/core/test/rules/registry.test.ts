@@ -3,9 +3,9 @@ import { ALL_RULES, getRule } from '../../src/rules/index.js'
 import { DIMENSIONS, FORECAST_TYPES } from '../../src/model.js'
 
 describe('rule registry', () => {
-  it('has 12 rules with unique ids', () => {
-    expect(ALL_RULES).toHaveLength(12)
-    expect(new Set(ALL_RULES.map((r) => r.id)).size).toBe(12)
+  it('has 13 rules with unique ids', () => {
+    expect(ALL_RULES).toHaveLength(13)
+    expect(new Set(ALL_RULES.map((r) => r.id)).size).toBe(13)
   })
   it('every rule has valid metadata', () => {
     for (const r of ALL_RULES) {

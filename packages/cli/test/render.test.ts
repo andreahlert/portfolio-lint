@@ -14,7 +14,7 @@ const DASHES = /[\u2013\u2014]/
 describe('renderers', () => {
   it('table has all sections and no em/en dashes', () => {
     const t = renderTable(report)
-    for (const s of ['Dimensions', 'Forecasts', 'Projects', 'Remediation', 'Violations (16)']) expect(t).toContain(s)
+    for (const s of ['Dimensions', 'Forecasts', 'Projects', 'Delivery forecast', 'What limits each forecast', 'Remediation', 'Violations (16)']) expect(t).toContain(s)
     expect(t).not.toMatch(DASHES)
   })
   it('table truncates violations', () => {
@@ -25,6 +25,8 @@ describe('renderers', () => {
     const m = renderMarkdown(report)
     expect(m).toContain('| Forecast | Score | Label |')
     expect(m).toContain('### ALPHA')
+    expect(m).toContain('## Delivery forecast')
+    expect(m).toContain('### ALPHA forecast')
     expect(m).toContain('1. **')
     expect(m).not.toMatch(DASHES)
   })
@@ -33,10 +35,10 @@ describe('renderers', () => {
     expect(j.score).toBe(report.score)
     expect(j.remediation[0].ruleId).toBe(report.remediation[0]?.ruleId)
   })
-  it('rules docs list all 12 rules', () => {
+  it('rules docs list all 13 rules', () => {
     const md = renderRulesMarkdown()
-    expect(md.match(/^## /gm)).toHaveLength(12)
+    expect(md.match(/^## /gm)).toHaveLength(13)
     expect(md).not.toMatch(DASHES)
-    expect(renderRulesTable().split('\n').filter(Boolean)).toHaveLength(14)
+    expect(renderRulesTable().split('\n').filter(Boolean)).toHaveLength(15)
   })
 })

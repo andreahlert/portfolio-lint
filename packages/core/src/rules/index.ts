@@ -5,6 +5,7 @@ import { missingDueDate } from './missing-due-date.js'
 import { missingParent } from './missing-parent.js'
 import { epicWithoutChildren } from './epic-without-children.js'
 import { brokenDependency } from './broken-dependency.js'
+import { dependencyCycle } from './dependency-cycle.js'
 import { staleInProgress } from './stale-in-progress.js'
 import { staleOpen } from './stale-open.js'
 import { overdueOpen } from './overdue-open.js'
@@ -19,6 +20,7 @@ export const ALL_RULES: Rule[] = [
   missingParent,
   epicWithoutChildren,
   brokenDependency,
+  dependencyCycle,
   staleInProgress,
   staleOpen,
   overdueOpen,

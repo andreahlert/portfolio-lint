@@ -1,5 +1,6 @@
 import type { Report } from '@portfolio-lint/core'
 import { DIMENSIONS, FORECAST_TYPES } from '@portfolio-lint/core'
+import { commitmentCell, finishCell, leverageSummary, num, programmeLine, statusNote } from './forecast.js'
 
 export function mdTable(headers: string[], rows: string[][]): string {
   const esc = (s: string) => s.replace(/\|/g, '\\|')
@@ -44,6 +45,44 @@ export function renderMarkdown(report: Report, opts: { maxViolations?: number } 
     ),
   )
   out.push('')
+  if (report.forecast) {
+    const f = report.forecast
+    out.push('## Delivery forecast')
+    out.push('')
+    out.push(`Monte Carlo on ${f.historyWeeks} weeks of throughput, ${f.simulations} runs per project, seed ${f.seed}. ${programmeLine(f)}.`)
+    out.push('')
+    out.push(
+      mdTable(
+        ['Project', 'Unit', 'Open', 'Unestimated', 'Throughput/wk', 'p50', 'p85', 'p95', 'Commitment', 'Confidence'],
+        f.projects.map((p) => [
+          p.key,
+          p.remaining.unit,
+          String(p.remaining.openItems),
+          String(p.remaining.unestimatedItems),
+          p.throughput ? num(p.throughput.mean) : 'n/a',
+          finishCell(p, 'p50'),
+          finishCell(p, 'p85'),
+          finishCell(p, 'p95'),
+          commitmentCell(p),
+          p.confidence.level,
+        ]),
+      ),
+    )
+    out.push('')
+    for (const p of f.projects) {
+      out.push(`### ${p.key} forecast`)
+      out.push('')
+      const note = statusNote(p)
+      const lines = note ? [note] : [...p.confidence.reasons, ...leverageSummary(p)]
+      if (lines.length === 0) lines.push('nothing in the data limits this forecast')
+      for (const l of lines) out.push(`- ${l}`)
+      if (p.leverage.length > 0) {
+        out.push('')
+        out.push(mdTable(['Fix first', 'Project', 'Problems', 'Title'], p.leverage.map((i) => [i.key, i.projectKey, i.issues.join(', '), i.title])))
+      }
+      out.push('')
+    }
+  }
   out.push('## Remediation, highest impact first')
   out.push('')
   if (report.remediation.length === 0) out.push('Nothing to fix.')

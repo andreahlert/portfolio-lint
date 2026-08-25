@@ -5,9 +5,11 @@
 Lint your project portfolio before you let AI forecast it.
 
 `portfolio-lint` is the reference implementation of the **Portfolio AI-Readiness Framework**:
-twelve deterministic rules that score how ready a portfolio's data is for schedule, capacity and scope
-forecasting, and tell you what to fix first. It runs on Jira Cloud (CLI and native Forge app) and on any
-tool that can export CSV.
+thirteen deterministic rules that score how ready a portfolio's data is for schedule, capacity and scope
+forecasting, and tell you what to fix first. It then runs the forecast itself: a Monte Carlo on each
+project's real throughput plus a critical path over the dependency graph, so you see p50/p85/p95 dates,
+which items are on the critical path, and how many weeks of uncertainty come from data you can fix today.
+It runs on Jira Cloud (CLI and native Forge app) and on any tool that can export CSV.
 
 ```
 Portfolio readiness: 85.4 / 100  grade B
@@ -17,6 +19,18 @@ forecast  score  label
 schedule  75.0   reliable
 capacity  68.8   degraded
 scope     77.1   reliable
+
+Delivery forecast (Monte Carlo on 12 weeks of throughput, 2000 runs, seed 42)
+project  unit    open  unestimated  throughput/wk  p50                p85                commitment                  confidence
+ERPMIG   points  241   19           43.3           2027-03-22 (30w)   2027-04-12 (33w)   2026-11-03 late (+22.9w)    high
+ERPPMO   points  119   77           5.0            2028-10-30 (114w)  2029-04-23 (139w)  2026-11-05 late (+128.6w)   low
+
+What limits each forecast
+  ERPPMO
+    - only 3 of the last 12 weeks have completed work
+    - 77 of 119 open items (65%) have no estimate
+    - estimate the 77 unestimated items and p85 moves from 2029-04-23 to 2028-09-18 (31 weeks of uncertainty removed)
+    - critical path (2 items, 15 points): ERPPMO-228 -> ERPPMO-206
 
 Remediation (highest impact first)
 1  missing-estimate            2  Run an estimation session for the listed items...   ALPHA-15, BETA-15
@@ -103,10 +117,22 @@ Exit codes: `0` ok, `1` score below `--fail-under`, `2` usage, connection or for
   "staleInProgressDays": 14,
   "staleOpenDays": 90,
   "maxWipPerPerson": 3,
+  "wipOutlierFactor": 2,
+  "wipHardLimit": 10,
+  "wipAdaptiveMinPeople": 3,
   "outlierFactor": 5,
-  "disabledRules": ["estimate-outlier"]
+  "disabledRules": ["estimate-outlier"],
+  "projects": {
+    "OPS": { "staleInProgressDays": 30, "disabledRules": ["missing-parent"] }
+  },
+  "forecast": { "enabled": true, "historyWeeks": 12, "simulations": 2000, "seed": 42 }
 }
 ```
+
+Every key is optional. `projects` overrides thresholds for one project key (its `disabledRules` add to the
+portfolio list). The WIP limit adapts to the team: with at least `wipAdaptiveMinPeople` people in progress it
+becomes `max(maxWipPerPerson, wipOutlierFactor x team median)`, never above `wipHardLimit`, so a busy team is
+compared with itself instead of a fixed number. `--no-forecast` skips the Monte Carlo pass.
 
 ## How scoring works
 
@@ -115,13 +141,24 @@ Exit codes: `0` ok, `1` score below `--fail-under`, `2` usage, connection or for
 - Project = mean of dimensions. Portfolio = item-weighted mean of projects.
 - Forecast label (schedule, capacity, scope) = minimum score among the rules that feed it: reliable >= 75, degraded >= 50, unreliable below.
 - Remediation priority = `(100 - score) * weight * applicable`, so a heavy rule failing on many items rises to the top.
+- Dependencies resolve across the whole scan, so a link into another scanned project is not "broken".
+
+## How the delivery forecast works
+
+- Throughput = completed work per week over the last `historyWeeks` (12), from `resolvedAt`. In points when at least half of the completed items are estimated, otherwise in items.
+- Monte Carlo: each run draws a week of throughput at random from that history until the open work is gone. Unestimated items draw a size from the project's own estimate distribution. p50/p85/p95 are the weeks by which 50/85/95% of runs finish.
+- Scope uncertainty: the same simulation with every unestimated item pinned to the project's median estimate. The p85 difference is how many weeks the missing estimates alone add, which is what "estimate these N items" buys you.
+- Critical path: longest chain by estimate through the open items of the whole scan (dependencies cross projects), with the items on it that have missing estimates, no assignee, stale updates or overdue dates. Dependency cycles are reported, not silently dropped.
+- Commitment: p85 against the latest due date on an open epic. on-track (p85 before it), at-risk (p50 before, p85 after), late (p50 after).
+- Confidence: high, medium or low from the throughput history length, share of unestimated work, critical path gaps, cycles and throughput variance. The reasons are listed, not hidden.
 
 Full detail in [docs/framework.md](docs/framework.md).
 
 ## Jira app (Forge)
 
 `apps/forge` is a native Jira Cloud app: portfolio and project pages, a daily scheduled scan, and a
-Rovo agent ("Portfolio Readiness Advisor") that answers "what should we fix first" from the latest report.
+Rovo agent ("Portfolio Readiness Advisor") that answers "what should we fix first" and "when will this finish"
+from the latest report. Both pages have a Delivery forecast tab (dates, commitment verdict, critical path, fix-first list).
 Data never leaves Atlassian. See [apps/forge/README.md](apps/forge/README.md).
 
 ![Portfolio Readiness page in Jira: score 81.7 grade B, forecast reliability per project, remediation list](docs/img/forge-global-page.jpg)
@@ -148,7 +185,8 @@ npm run typecheck -w portfolio-lint-forge
 
 - Connectors: Azure DevOps, Asana, Linear.
 - Capacity supply rules (availability, leave) once a people source exists.
-- Settings page in the Forge app; per-project thresholds.
+- Settings page in the Forge app (per-project thresholds already work via config).
+- Assignee view: who is on the critical path and overloaded at the same time.
 - Readiness badge for READMEs and portfolio dashboards.
 
 ## License

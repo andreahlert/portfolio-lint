@@ -30,12 +30,19 @@ modules:
         schedule, capacity and scope forecasts. Always call get-portfolio-score
         before answering questions about scores, grades or what to fix. Call
         explain-rule when the user asks what a rule means or why it matters.
-        Never invent scores. If no report exists yet, tell the user to open the
-        Portfolio Readiness page and run a scan. Present remediation as a short,
-        prioritized list and say which forecast each fix improves. You do not
-        change any Jira data; you only read the latest report.
+        Never invent scores or dates. If no report exists yet, tell the user to
+        open the Portfolio Readiness page and run a scan. Present remediation as
+        a short, prioritized list and say which forecast each fix improves. The
+        report also carries a delivery forecast per project (p50, p85 and p95
+        finish dates from a Monte Carlo on real throughput, a commitment verdict
+        against the latest epic due date, the critical path and the items to
+        fix first). When asked "when will X finish", quote the p85 as the date
+        to commit to, the p50 as the likely date, the confidence level and its
+        reasons, and how many weeks of uncertainty come from unestimated items.
+        You do not change any Jira data; you only read the latest report.
       conversationStarters:
         - How ready is our portfolio for AI forecasting?
+        - When will each project finish, and how sure are we?
         - What should we fix first to trust schedule forecasts?
         - Explain the stale-in-progress rule
       actions:
@@ -47,10 +54,10 @@ modules:
       function: getPortfolioScore
       actionVerb: GET
       description: >
-        Returns the latest Portfolio AI-Readiness report: portfolio score,
-        grade, per-forecast reliability (schedule, capacity, scope), per-project
-        scores and the prioritized remediation list. Optionally filtered to one
-        Jira project key.
+        Latest Portfolio AI-Readiness report: score, grade, forecast
+        reliability, per-project scores, remediation list and delivery forecast
+        (p50/p85/p95 dates, commitment, confidence, critical path, fix-first
+        items). Optional project key filter.
       inputs:
         projectKey:
           title: Project key

@@ -1,5 +1,6 @@
 import type { Report } from '@portfolio-lint/core'
 import { DIMENSIONS, FORECAST_TYPES } from '@portfolio-lint/core'
+import { FORECAST_HEADERS, forecastRows, leverageSummary, programmeLine, statusNote } from './forecast.js'
 
 export function textTable(headers: string[], rows: string[][]): string {
   const widths = headers.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)))
@@ -43,6 +44,24 @@ export function renderTable(report: Report, opts: { maxViolations?: number } = {
     ),
   )
   out.push('')
+  if (report.forecast) {
+    const f = report.forecast
+    out.push(`Delivery forecast (Monte Carlo on ${f.historyWeeks} weeks of throughput, ${f.simulations} runs, seed ${f.seed})`)
+    out.push(textTable(FORECAST_HEADERS, forecastRows(f)))
+    out.push(programmeLine(f))
+    out.push('')
+    out.push('What limits each forecast')
+    for (const p of f.projects) {
+      const note = statusNote(p)
+      const lines = note ? [note] : [...p.confidence.reasons, ...leverageSummary(p)]
+      if (lines.length === 0) lines.push('nothing in the data limits this forecast')
+      out.push(`  ${p.key}`)
+      for (const l of lines) out.push(`    - ${l}`)
+      const lev = p.leverage.slice(0, 5)
+      if (lev.length > 0) out.push(`    - fix first: ${lev.map((i) => `${i.key} (${i.issues.join(', ')})`).join('; ')}`)
+    }
+    out.push('')
+  }
   out.push('Remediation (highest impact first)')
   if (report.remediation.length === 0) out.push('  nothing to fix')
   else

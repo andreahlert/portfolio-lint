@@ -11,7 +11,13 @@ import {
 /** Upper bound so a scheduled scan on a big site stays inside Forge invocation limits. */
 export const MAX_PROJECTS_PER_SCAN = 20
 export const MAX_ISSUES_PER_PROJECT = 2000
+/** Jira returns at most 100 issues per search page for this field set, whatever maxResults says. */
 const PAGE_SIZE = 100
+/**
+ * Projects fetched at once. Pages within a project are sequential (nextPageToken), so
+ * concurrency across projects is what keeps a 4k-issue site inside the 25 s invocation limit.
+ */
+const PROJECT_CONCURRENCY = 4
 
 interface FieldMeta {
   id: string
@@ -76,11 +82,24 @@ export async function fetchProject(key: string, storyPointsFields: string[]): Pr
   return mapJiraProject({ id: meta.id, key: meta.key, name: meta.name }, issues, { storyPointsField: storyPointsFields })
 }
 
+/** Run `fn` over `items` with at most `limit` in flight, keeping input order. */
+export async function mapConcurrent<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array<R>(items.length)
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next
+      next += 1
+      out[i] = await fn(items[i] as T)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return out
+}
+
 export async function fetchPortfolio(projectKeys: string[], name: string): Promise<Portfolio> {
   const storyPointsFields = await fetchStoryPointsFields()
-  const projects: Project[] = []
-  for (const key of projectKeys.slice(0, MAX_PROJECTS_PER_SCAN)) {
-    projects.push(await fetchProject(key, storyPointsFields))
-  }
+  const keys = projectKeys.slice(0, MAX_PROJECTS_PER_SCAN)
+  const projects = await mapConcurrent(keys, PROJECT_CONCURRENCY, (key) => fetchProject(key, storyPointsFields))
   return { name, scannedAt: new Date().toISOString(), projects }
 }

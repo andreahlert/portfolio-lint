@@ -25,6 +25,7 @@ program
   .option('--fail-under <score>', 'Exit 1 when the portfolio score is below this value', parseFloat)
   .option('--now <iso>', 'Freeze "now" for reproducible runs, e.g. 2026-08-24T00:00:00Z')
   .option('--name <name>', 'Portfolio name shown in the report')
+  .option('--no-forecast', 'Skip the Monte Carlo delivery forecast')
   .action(async (opts) => {
     const { code } = await runScan(opts, {
       stdout: (s) => process.stdout.write(s),

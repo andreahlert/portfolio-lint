@@ -42,6 +42,7 @@ import {
   toRuleMap,
   type ViolationRow,
 } from './shared'
+import { ProjectForecastPanel, type ProjectForecastRow } from './forecast'
 
 interface RuleScore {
   id: string
@@ -70,6 +71,8 @@ interface ProjectPayload {
   violations: ViolationRow[]
   /** True count for the project; `violations` can be shorter when the stored list is capped. */
   violationCount?: number
+  forecast?: ProjectForecastRow | null
+  historyWeeks?: number
 }
 
 const dimensionAppearance = (d: string) =>
@@ -227,6 +230,7 @@ function App() {
             <Tabs id="project-tabs">
               <TabList>
                 <Tab>Fix first</Tab>
+                <Tab>Delivery forecast</Tab>
                 <Tab>Rules</Tab>
                 <Tab>{`Findings (${violationCount})`}</Tab>
               </TabList>
@@ -236,6 +240,15 @@ function App() {
                     <RemediationList rows={p.remediation} violations={violations} rules={rules} />
                   ) : (
                     <Text color="color.text.subtle">Scan again to get a prioritized fix list for this project.</Text>
+                  )}
+                </TabBody>
+              </TabPanel>
+              <TabPanel>
+                <TabBody>
+                  {data?.forecast ? (
+                    <ProjectForecastPanel forecast={data.forecast} historyWeeks={data.historyWeeks ?? 12} rules={rules} />
+                  ) : (
+                    <Text color="color.text.subtle">Scan again to get a delivery forecast for this project.</Text>
                   )}
                 </TabBody>
               </TabPanel>

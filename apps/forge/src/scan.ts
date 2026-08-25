@@ -1,5 +1,5 @@
 import { storage } from '@forge/api'
-import { lintPortfolio, type LintConfig, type ProjectReport, type Report, type Violation } from '@portfolio-lint/core'
+import { lintPortfolio, type LintConfigInput, type ProjectReport, type Report, type Violation } from '@portfolio-lint/core'
 import { fetchPortfolio, listProjectKeys } from './jiraClient'
 
 export const KEY_LATEST = 'report:latest'
@@ -51,11 +51,11 @@ export function sampleAcrossProjects(violations: Violation[], limit: number): Vi
   return out
 }
 
-export async function loadConfig(): Promise<Partial<LintConfig>> {
-  return ((await storage.get(KEY_CONFIG)) as Partial<LintConfig> | undefined) ?? {}
+export async function loadConfig(): Promise<LintConfigInput> {
+  return ((await storage.get(KEY_CONFIG)) as LintConfigInput | undefined) ?? {}
 }
 
-export async function saveConfig(config: Partial<LintConfig>): Promise<void> {
+export async function saveConfig(config: LintConfigInput): Promise<void> {
   await storage.set(KEY_CONFIG, config)
 }
 

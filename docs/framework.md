@@ -39,7 +39,7 @@ Each rule declares which forecasts it degrades. A forecast is only as reliable a
 
 | Forecast | Depends on rules |
 |---|---|
-| Schedule (when will it land) | missing-due-date, broken-dependency, stale-in-progress, overdue-open, status-resolution-mismatch |
+| Schedule (when will it land) | missing-due-date, broken-dependency, dependency-cycle, stale-in-progress, overdue-open, status-resolution-mismatch |
 | Capacity (can the team absorb it) | missing-estimate, missing-assignee, overallocated-assignee, estimate-outlier |
 | Scope (what is actually in) | missing-estimate, missing-parent, epic-without-children, stale-open |
 
@@ -58,6 +58,27 @@ Labels: **reliable** (>= 75), **degraded** (>= 50), **unreliable** (< 50), **n/a
 Why the minimum for forecast labels: a schedule forecast with perfect due dates but 40% stale in-progress
 items is not "mostly fine", it is wrong about where the work is right now.
 
+Two rules of credibility: a rule with nothing to check never feeds a label (a project without dependencies
+cannot be "unreliable" on dependencies), and every rule looks at the whole scan, not one project, so a link
+into a sibling project is a real link.
+
+## The delivery forecast
+
+The score says whether a forecast can be trusted. The framework also produces the forecast, so the two can be
+read together: "p85 is April, low confidence, and 31 of those weeks are missing estimates".
+
+1. **Throughput**: completed work per week over the last N weeks (default 12) from resolution dates. Points when at least half of the completed items carry an estimate, else items.
+2. **Monte Carlo**: each run draws a random week of throughput from that history until the open work is consumed. Unestimated items draw a size from the project's own estimate distribution. p50, p85 and p95 are the weeks by which 50%, 85% and 95% of runs finish. p85 is the date to commit to.
+3. **Scope uncertainty**: the same simulation with every unestimated item pinned to the project's median estimate. The p85 difference is the uncertainty that missing estimates alone add. That is the number to show the team before an estimation session.
+4. **Critical path**: the longest chain by estimate through the open items of the whole scan, so a chain that crosses project boundaries is followed. Unestimated items on it count at the project median. Cycles are reported as such; nothing downstream of a cycle can be scheduled.
+5. **Commitment**: p85 against the latest due date of an open epic. on-track (p85 before it), at-risk (p50 before, p85 after), late (p50 after).
+6. **Confidence**: high, medium or low from history length, share of unestimated work, gaps on the critical path, cycles and throughput variance. Every downgrade carries its reason.
+7. **Fix first**: items on the critical path with data problems, then in-progress items, ranked by how much each problem distorts the dates (missing estimate > missing assignee, stale > overdue).
+
+The simulation is seeded, so two runs on the same data agree. It is a throughput model, not a plan: it says
+when the current team finishes the current backlog at the current pace. Adding people or cutting scope
+changes the inputs, not the method.
+
 ## Canonical model
 
 The framework is tool-agnostic. Every connector maps its source to this shape:
@@ -75,9 +96,11 @@ The rules never look at anything outside this model, so a new connector inherits
 
 ## Rule catalogue
 
-Twelve rules ship in version 0.1. See [rules.md](rules.md) for the generated reference (dimension, weight,
-forecasts, impact, remediation). Thresholds are configurable: stale in progress (14 days), stale open (90 days),
-WIP per person (3), outlier factor (5x median).
+Thirteen rules ship in version 0.1. See [rules.md](rules.md) for the generated reference (dimension, weight,
+forecasts, impact, remediation). Thresholds are configurable per portfolio and per project: stale in progress
+(14 days), stale open (90 days), outlier factor (5x median). The WIP limit adapts to the team: baseline 3 per
+person, raised to 2x the team median once three or more people are in progress, capped at 10, so the rule
+finds the outlier in a busy team instead of flagging everyone.
 
 ## How to adopt it
 
@@ -103,5 +126,6 @@ WIP per person (3), outlier factor (5x median).
 
 - Rules measure data quality, not plan quality. A complete, fresh, consistent plan can still be a bad plan.
 - Thresholds are defaults from consulting practice, not research constants. Calibrate per organisation.
-- Cross-project dependencies are only visible when both projects are in the same scan.
+- Cross-project dependencies are only visible when both projects are in the same scan. Links to projects outside the scan count as broken.
+- The forecast needs resolution dates. Work that is deleted or bulk-closed without a resolution date leaves no throughput to sample.
 - Version 0.1 has no rule for capacity supply (availability, leave). It scores demand-side data only.
