@@ -121,7 +121,7 @@ export function FixModal({ violation, kind, rules, onClose, onFixed }: { violati
     setBusy(true)
     setError(null)
     try {
-      const r = await invoke<FixResult>('fixIssue', { issueKey, action })
+      const r = await invoke<FixResult>('fixIssue', { issueKey, action, ruleId: violation.ruleId })
       if (!r.ok) {
         setError(r.error)
         return false

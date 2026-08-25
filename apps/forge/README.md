@@ -11,6 +11,9 @@ reads issues with `read:jira-work`, stores reports in Forge storage, and ships a
 | `jira:projectPage` AI Readiness | Same for one project, plus per-rule table. |
 | `scheduledTrigger` daily | Rescans every project the app can read (up to 20 projects, 2000 issues each). |
 | `rovo:agent` Portfolio Readiness Advisor | Answers "how ready are we", "what to fix first", "explain rule X" via two actions: `getPortfolioScore`, `explainRule`. |
+| `jira:customField` Readiness, Readiness findings | Read-only fields owned by the app: the rule ids an issue violates (list of strings) and their count (number). Filled by the scan, trimmed by inline fixes. Usable as columns, on cards, in filters and JQL (`Readiness = "missing-estimate"`, `"Readiness findings" >= 2`). |
+| `jira:jqlFunction` readinessFindings | `issue in readinessFindings("stale-open")` or `issue in readinessFindings()` for any finding; `not in` works too. Expands to a clause on the fields above. |
+| `consumer` field-sync | Async events queue that writes the field values after each scan, outside the 25 s invocation budget. |
 
 ## Prerequisites
 
@@ -51,6 +54,8 @@ stale in progress 14 days, stale open 90 days, baseline WIP 3, outlier factor 5.
 
 - `src/index.ts`: resolver (`getReport`, `scanNow`, `getProjectReport`, `listRules`, `getDocs`, `getSettings`, `saveSettings`, `saveProjectSettings`, `getFixOptions`, `fixIssue`), scheduled handler, Rovo actions.
 - `src/fixes.ts`: inline fixes, written with `api.asUser()` so Jira permissions and history stay with the person clicking. `src/permissions.ts`: Jira admin / project admin checks that gate the Settings tabs.
+- `src/fields.ts`: Readiness custom fields. `runScan` queues one event per 800 issues plus a reconcile event per project; the consumer resolves the field ids once (`GET /rest/api/3/field`, matched by the `/static/<moduleKey>` suffix of `schema.custom`, cached in storage), writes both fields with `POST /rest/api/3/app/field/value?generateChangelog=false` in chunks of 100 issues, and the reconcile event clears issues that still carry a value but have no finding (found with `cf[id] is not EMPTY`). Jira errors return `InvocationError` so the queue retries (up to 3 times). `fixIssue` drops the fixed rule from the issue right away.
+- Custom field gotcha: Forge string fields only match with `=` in JQL (`~` never matches), so the rules field is `collection: list` with one entry per rule. The number field is what makes `is not EMPTY` and `>= n` cheap.
 - `src/frontend/`: `docs.tsx` (in-app rule reference and per-rule modal), `settings.tsx` (global settings and per-project overrides, validated by `@portfolio-lint/core` config schema), `findings.tsx` and `fix.tsx` (compact findings table with Fix buttons).
 - UI Kit gotcha: the `@forge/react` reconciler copies `children` into host-element props on every update and serializes the whole doc to the host. A `React.Context.Provider` element inside those props is circular and silently freezes the sandbox (every later click is ignored, no error anywhere). Keep any Provider above the first host element (see `DocsHost` in the pages).
 - UI Kit gotcha: `route` from `@forge/api` URL-encodes interpolated values, so build JQL and field lists with plain strings.

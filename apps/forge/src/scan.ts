@@ -1,5 +1,6 @@
 import { storage } from '@forge/api'
 import { lintPortfolio, type LintConfigInput, type ProjectReport, type Report, type Violation } from '@portfolio-lint/core'
+import { queueFieldSync } from './fields'
 import { fetchPortfolio, listProjectKeys } from './jiraClient'
 
 export const KEY_LATEST = 'report:latest'
@@ -94,6 +95,8 @@ export async function runScan(projectKeys?: string[]): Promise<StoredReport> {
   const history = await loadHistory()
   history.push({ scannedAt: report.scannedAt, score: report.score, grade: report.grade })
   await storage.set(KEY_HISTORY, history.slice(-HISTORY_LIMIT))
+  // Jira custom fields catch up asynchronously so the scan stays inside the invocation budget.
+  await queueFieldSync(report, portfolio)
   return stored
 }
 

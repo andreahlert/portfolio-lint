@@ -162,6 +162,10 @@ from the latest report. Both pages have a Delivery forecast tab (dates, commitme
 Rule documentation lives in a Docs tab inside the app, a Settings tab lets Jira admins tune thresholds and turn
 rules on or off (project admins can override them per project), and every fixable finding has a Fix button that
 writes the correction to Jira as the current user (estimate, assignee, due date, parent, transition).
+Findings also live in Jira itself: two app-owned custom fields, **Readiness** (the rule ids an issue violates) and
+**Readiness findings** (how many), are filled by the daily scan and updated by inline fixes, so they work as
+columns in the issue navigator and list view, on board cards, in filters and in JQL
+(`issue in readinessFindings("missing-estimate")`, `"Readiness findings" >= 2`).
 Data never leaves Atlassian. See [apps/forge/README.md](apps/forge/README.md).
 
 ![Portfolio Readiness page in Jira: score 81.7 grade B, forecast reliability per project, remediation list](docs/img/forge-global-page.jpg)

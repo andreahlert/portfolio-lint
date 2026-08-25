@@ -19,6 +19,36 @@ modules:
     - key: portfolio-lint-daily
       function: scheduled
       interval: day
+  jira:customField:
+    - key: readiness-rules
+      name: Readiness
+      description: Rules this issue violates in the latest Portfolio Readiness scan.
+        Updated by the daily scan and by inline fixes; empty when the issue is clean.
+      type: string
+      collection: list
+      readOnly: true
+    - key: readiness-findings
+      name: Readiness findings
+      description: Number of Portfolio Readiness findings on this issue. Empty when
+        the issue is clean.
+      type: number
+      readOnly: true
+  jira:jqlFunction:
+    - key: readiness-findings-jql
+      name: readinessFindings
+      function: jqlReadiness
+      operators:
+        - in
+        - not in
+      types:
+        - issue
+      arguments:
+        - name: rule
+          required: false
+  consumer:
+    - key: field-sync-consumer
+      queue: field-sync
+      function: syncFields
   rovo:agent:
     - key: portfolio-readiness-advisor
       name: Portfolio Readiness Advisor
@@ -90,6 +120,11 @@ modules:
       handler: index.getPortfolioScore
     - key: explainRule
       handler: index.explainRule
+    - key: syncFields
+      handler: index.syncFields
+      timeoutSeconds: 600
+    - key: jqlReadiness
+      handler: index.jqlReadiness
 resources:
   - key: global-page
     path: src/frontend/global-page.tsx

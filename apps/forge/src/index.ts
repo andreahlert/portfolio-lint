@@ -11,6 +11,7 @@ import {
   type LintConfigInput,
   type ProjectForecast,
 } from '@portfolio-lint/core'
+import { jqlReadiness, removeRuleFromIssue, syncFields } from './fields'
 import { applyFix, FixError, fixOptions, type FixAction, type FixOptionKind } from './fixes'
 import { listProjectKeys } from './jiraClient'
 import { isJiraAdmin, isProjectAdmin } from './permissions'
@@ -141,7 +142,9 @@ resolver.define('getFixOptions', async ({ payload }) => {
 /** Applies one fix to one issue, as the current user, so Jira permissions and history stay honest. */
 resolver.define('fixIssue', async ({ payload }) => {
   try {
-    const result = await applyFix(String(payload?.issueKey ?? ''), (payload?.action ?? {}) as FixAction)
+    const issueKey = String(payload?.issueKey ?? '')
+    const result = await applyFix(issueKey, (payload?.action ?? {}) as FixAction)
+    if (typeof payload?.ruleId === 'string' && payload.ruleId) await removeRuleFromIssue(issueKey, payload.ruleId)
     return { ok: true, note: result.note }
   } catch (e) {
     return { ok: false, error: userMessage(e) }
@@ -149,6 +152,9 @@ resolver.define('fixIssue', async ({ payload }) => {
 })
 
 export const handler = resolver.getDefinitions()
+
+/** Async events consumer that writes the Readiness custom fields (see fields.ts). */
+export { syncFields, jqlReadiness }
 
 /** Daily scheduled scan of every project the app can see. */
 export async function scheduled(): Promise<void> {
